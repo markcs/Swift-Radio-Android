@@ -6,22 +6,34 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.fethica.swiftradio.data.RadioStation
 import com.fethica.swiftradio.data.StationsRepository
+import com.fethica.swiftradio.ui.NowPlayingScreen
 import com.fethica.swiftradio.ui.StationsScreen
+import com.fethica.swiftradio.ui.components.MiniPlayer
 import com.fethica.swiftradio.ui.theme.SwiftRadioTheme
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -33,7 +45,11 @@ class MainActivity : ComponentActivity() {
     private var stations by mutableStateOf<List<RadioStation>>(emptyList())
     private var currentStation by mutableStateOf<RadioStation?>(null)
     private var isPlaying by mutableStateOf(false)
+    private var trackTitle by mutableStateOf("")
+    private var artistName by mutableStateOf("")
+    private var artworkUrl by mutableStateOf<String?>(null)
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -56,12 +72,49 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SwiftRadioTheme {
-                StationsScreen(
-                    stations = stations,
-                    currentStation = currentStation,
-                    isPlaying = isPlaying,
-                    onStationClick = { station -> playStation(station) }
+                val scope = rememberCoroutineScope()
+                val bottomSheetState = rememberStandardBottomSheetState(
+                    initialValue = SheetValue.Hidden,
+                    skipHiddenState = false
                 )
+                val scaffoldState = rememberBottomSheetScaffoldState(
+                    bottomSheetState = bottomSheetState
+                )
+
+                BottomSheetScaffold(
+                    scaffoldState = scaffoldState,
+                    sheetPeekHeight = if (currentStation != null) 64.dp else 0.dp,
+                    sheetDragHandle = null,
+                    sheetContent = {
+                        if (currentStation != null) {
+                            NowPlayingScreen(
+                                stationName = currentStation?.name ?: "",
+                                trackTitle = trackTitle,
+                                artistName = artistName,
+                                artworkUrl = artworkUrl ?: resolveStationImageUrl(currentStation),
+                                isPlaying = isPlaying,
+                                isLive = true,
+                                onPlayPauseClick = { togglePlayPause() },
+                                onNextClick = { nextStation() },
+                                onPreviousClick = { previousStation() },
+                                hideNextPrevious = Config.hideNextPreviousButtons
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                ) { padding ->
+                    StationsScreen(
+                        stations = stations,
+                        currentStation = currentStation,
+                        isPlaying = isPlaying,
+                        onStationClick = { station ->
+                            playStation(station)
+                            scope.launch {
+                                bottomSheetState.partialExpand()
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -77,6 +130,12 @@ class MainActivity : ComponentActivity() {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
                 }
+
+                override fun onMediaMetadataChanged(metadata: MediaMetadata) {
+                    trackTitle = metadata.title?.toString() ?: ""
+                    artistName = metadata.artist?.toString() ?: ""
+                    artworkUrl = metadata.artworkUri?.toString()
+                }
             })
         }, MoreExecutors.directExecutor())
     }
@@ -88,6 +147,9 @@ class MainActivity : ComponentActivity() {
 
     private fun playStation(station: RadioStation) {
         currentStation = station
+        trackTitle = ""
+        artistName = ""
+        artworkUrl = null
         controllerFuture.addListener({
             val controller = controllerFuture.get()
             val mediaItem = MediaItem.fromUri(station.streamURL)
@@ -95,5 +157,35 @@ class MainActivity : ComponentActivity() {
             controller.prepare()
             controller.play()
         }, MoreExecutors.directExecutor())
+    }
+
+    private fun togglePlayPause() {
+        controllerFuture.addListener({
+            val controller = controllerFuture.get()
+            if (controller.isPlaying) controller.pause() else controller.play()
+        }, MoreExecutors.directExecutor())
+    }
+
+    private fun nextStation() {
+        val idx = stations.indexOf(currentStation)
+        if (idx >= 0 && stations.isNotEmpty()) {
+            playStation(stations[(idx + 1) % stations.size])
+        }
+    }
+
+    private fun previousStation() {
+        val idx = stations.indexOf(currentStation)
+        if (idx >= 0 && stations.isNotEmpty()) {
+            playStation(stations[(idx - 1 + stations.size) % stations.size])
+        }
+    }
+
+    private fun resolveStationImageUrl(station: RadioStation?): String? {
+        station ?: return null
+        if (station.imageURL.startsWith("http")) return station.imageURL
+        val extensions = listOf("png", "jpg", "jpeg")
+        val assetFiles = assets.list("")?.toSet() ?: emptySet()
+        val match = extensions.firstOrNull { "${station.imageURL}.$it" in assetFiles }
+        return if (match != null) "file:///android_asset/${station.imageURL}.$match" else null
     }
 }
