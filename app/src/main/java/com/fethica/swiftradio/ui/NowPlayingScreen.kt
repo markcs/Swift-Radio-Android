@@ -37,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -123,11 +124,11 @@ fun NowPlayingScreen(
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 32.dp)
+                    .basicMarquee()
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -137,11 +138,11 @@ fun NowPlayingScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = SubtitleGray,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 24.dp)
+                    .basicMarquee()
             )
 
             Spacer(modifier = Modifier.height(20.dp))

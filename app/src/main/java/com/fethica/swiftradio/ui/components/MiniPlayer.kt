@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -65,14 +66,14 @@ fun MiniPlayer(
                 text = trackTitle.ifBlank { stationName },
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.basicMarquee()
             )
             Text(
                 text = stationName,
                 style = MaterialTheme.typography.bodySmall,
                 color = SubtitleGray,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.basicMarquee()
             )
         }
 
