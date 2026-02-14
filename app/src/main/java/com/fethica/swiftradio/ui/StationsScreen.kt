@@ -1,9 +1,11 @@
 package com.fethica.swiftradio.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,6 +34,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.fethica.swiftradio.data.RadioStation
+import com.fethica.swiftradio.ui.components.EqualizerAnimation
 import com.fethica.swiftradio.ui.theme.SubtitleGray
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +42,7 @@ import com.fethica.swiftradio.ui.theme.SubtitleGray
 fun StationsScreen(
     stations: List<RadioStation>,
     currentStation: RadioStation?,
+    isPlaying: Boolean,
     onStationClick: (RadioStation) -> Unit
 ) {
     Scaffold(
@@ -61,6 +65,7 @@ fun StationsScreen(
                 StationRow(
                     station = station,
                     isCurrentStation = station == currentStation,
+                    isPlaying = isPlaying && station == currentStation,
                     onClick = { onStationClick(station) }
                 )
             }
@@ -72,6 +77,7 @@ fun StationsScreen(
 private fun StationRow(
     station: RadioStation,
     isCurrentStation: Boolean,
+    isPlaying: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -128,13 +134,25 @@ private fun StationRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = station.desc,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SubtitleGray,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isCurrentStation) {
+                        EqualizerAnimation(
+                            isAnimating = isPlaying,
+                            barColor = SubtitleGray,
+                            modifier = Modifier.height(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = station.desc,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SubtitleGray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

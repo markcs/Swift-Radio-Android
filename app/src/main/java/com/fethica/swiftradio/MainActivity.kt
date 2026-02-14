@@ -16,6 +16,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.fethica.swiftradio.data.RadioStation
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var controllerFuture: ListenableFuture<MediaController>
     private var stations by mutableStateOf<List<RadioStation>>(emptyList())
     private var currentStation by mutableStateOf<RadioStation?>(null)
+    private var isPlaying by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +59,7 @@ class MainActivity : ComponentActivity() {
                 StationsScreen(
                     stations = stations,
                     currentStation = currentStation,
+                    isPlaying = isPlaying,
                     onStationClick = { station -> playStation(station) }
                 )
             }
@@ -67,6 +70,15 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val sessionToken = SessionToken(this, ComponentName(this, AudioService::class.java))
         controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
+        controllerFuture.addListener({
+            val controller = controllerFuture.get()
+            isPlaying = controller.isPlaying
+            controller.addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    isPlaying = playing
+                }
+            })
+        }, MoreExecutors.directExecutor())
     }
 
     override fun onStop() {
