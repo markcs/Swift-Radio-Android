@@ -7,29 +7,37 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.fethica.swiftradio.data.RadioStation
+import com.fethica.swiftradio.data.StationsRepository
+import com.fethica.swiftradio.ui.StationsScreen
+import com.fethica.swiftradio.ui.theme.SwiftRadioTheme
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
-import com.fethica.swiftradio.ui.theme.SwiftRadioTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var controllerFuture: ListenableFuture<MediaController>
+    private var stations by mutableStateOf<List<RadioStation>>(emptyList())
+    private var currentStation by mutableStateOf<RadioStation?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -38,14 +46,19 @@ class MainActivity : ComponentActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
         }
 
+        val repository = StationsRepository(this)
+        lifecycleScope.launch {
+            val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
+            stations = repository.loadStations(remoteUrl)
+        }
+
         setContent {
             SwiftRadioTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                StationsScreen(
+                    stations = stations,
+                    currentStation = currentStation,
+                    onStationClick = { station -> playStation(station) }
+                )
             }
         }
     }
@@ -54,30 +67,21 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val sessionToken = SessionToken(this, ComponentName(this, AudioService::class.java))
         controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture.addListener({
-            val controller = controllerFuture.get()
-            controller.play()
-        }, MoreExecutors.directExecutor())
     }
 
     override fun onStop() {
         super.onStop()
         MediaController.releaseFuture(controllerFuture)
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    SwiftRadioTheme {
-        Greeting("Android")
+    private fun playStation(station: RadioStation) {
+        currentStation = station
+        controllerFuture.addListener({
+            val controller = controllerFuture.get()
+            val mediaItem = MediaItem.fromUri(station.streamURL)
+            controller.setMediaItem(mediaItem)
+            controller.prepare()
+            controller.play()
+        }, MoreExecutors.directExecutor())
     }
 }
