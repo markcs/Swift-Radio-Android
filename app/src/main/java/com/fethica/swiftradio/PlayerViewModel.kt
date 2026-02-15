@@ -67,7 +67,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // Playlist tracking
     private var stationMediaItems: List<MediaItem> = emptyList()
-    private var activeStationIndex: Int = -1
 
     // Metadata/artwork tracking
     private val artworkService = ArtworkService()
@@ -173,8 +172,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         resetTrackInfo()
         uiState = uiState.copy(currentStation = station)
         stationMediaItems = buildMediaItems(uiState.stations)
-        activeStationIndex = stationIndex
-        withController { ctrl -> playActiveStation(ctrl) }
+        withController { ctrl ->
+            lastKnownMetadata = stationMediaItems[stationIndex].mediaMetadata
+            ctrl.setMediaItems(stationMediaItems, stationIndex, 0)
+            ctrl.prepare()
+            ctrl.play()
+            publishState(ctrl, lastKnownMetadata)
+        }
     }
 
     fun togglePlayPause() {
@@ -187,19 +191,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun nextStation() {
         if (uiState.stations.isEmpty() || stationMediaItems.isEmpty()) return
         hasUserSelectedStation = true
-        activeStationIndex = (activeStationIndex + 1) % stationMediaItems.size
+        val currentIndex = controller?.currentMediaItemIndex
+            ?.takeIf { it in stationMediaItems.indices }
+            ?: uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 }
+            ?: 0
+        val nextIndex = (currentIndex + 1) % stationMediaItems.size
         resetTrackInfo()
-        uiState = uiState.copy(currentStation = uiState.stations.getOrNull(activeStationIndex))
-        withController { ctrl -> playActiveStation(ctrl) }
+        uiState = uiState.copy(currentStation = uiState.stations.getOrNull(nextIndex))
+        withController { ctrl ->
+            seekOrReload(ctrl, nextIndex)
+        }
     }
 
     fun previousStation() {
         if (uiState.stations.isEmpty() || stationMediaItems.isEmpty()) return
         hasUserSelectedStation = true
-        activeStationIndex = (activeStationIndex - 1 + stationMediaItems.size) % stationMediaItems.size
+        val currentIndex = controller?.currentMediaItemIndex
+            ?.takeIf { it in stationMediaItems.indices }
+            ?: uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 }
+            ?: 0
+        val prevIndex = (currentIndex - 1 + stationMediaItems.size) % stationMediaItems.size
         resetTrackInfo()
-        uiState = uiState.copy(currentStation = uiState.stations.getOrNull(activeStationIndex))
-        withController { ctrl -> playActiveStation(ctrl) }
+        uiState = uiState.copy(currentStation = uiState.stations.getOrNull(prevIndex))
+        withController { ctrl ->
+            seekOrReload(ctrl, prevIndex)
+        }
     }
 
     fun seekTo(positionMs: Long) {
@@ -234,27 +250,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         commands.forEach { it(controller) }
     }
 
-    private fun playActiveStation(controller: MediaController) {
-        val index = activeStationIndex
+    private fun seekOrReload(ctrl: MediaController, index: Int) {
         if (index !in stationMediaItems.indices) return
-        lastKnownMetadata = stationMediaItems[index].mediaMetadata
-        controller.setMediaItems(stationMediaItems, index, 0)
-        controller.prepare()
-        controller.play()
-        publishState(controller, lastKnownMetadata)
+        ctrl.setMediaItems(stationMediaItems, index, 0)
+        ctrl.prepare()
+        ctrl.play()
+        publishState(ctrl)
     }
 
     private fun publishState(controller: MediaController, metadataOverride: MediaMetadata? = null) {
         val metadata = metadataOverride ?: lastKnownMetadata
         lastKnownMetadata = metadata
-        val currentIndex = if (activeStationIndex in stationMediaItems.indices) {
-            activeStationIndex
-        } else {
-            controller.currentMediaItemIndex
-        }
         _rawState.value = RawPlaybackState(
             isPlaying = controller.isPlaying,
-            currentMediaItemIndex = currentIndex,
+            currentMediaItemIndex = controller.currentMediaItemIndex,
             metadata = metadata,
             isLive = controller.isCurrentMediaItemLive,
             currentPositionMs = controller.currentPosition.coerceAtLeast(0),

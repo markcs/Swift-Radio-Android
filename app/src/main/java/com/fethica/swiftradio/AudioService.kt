@@ -24,6 +24,7 @@ class AudioService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var retryRunnable: Runnable? = null
     private var bufferingRecoveryRunnable: Runnable? = null
     private var stallRecoveryRunnable: Runnable? = null
     private var retryCount = 0
@@ -52,6 +53,8 @@ class AudioService : MediaSessionService() {
                 "SwiftRadio",
                 "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'"
             )
+            cancelRetry()
+            retryCount = 0
             if (!isEmptyTrackMetadata(exoPlayer.playlistMetadata)) {
                 exoPlayer.setPlaylistMetadata(MediaMetadata.Builder().build())
             }
@@ -165,6 +168,7 @@ class AudioService : MediaSessionService() {
             release()
         }
         player?.removeListener(playerListener)
+        cancelRetry()
         cancelBufferingRecovery()
         cancelStallRecovery()
         mainHandler.removeCallbacksAndMessages(null)
@@ -229,21 +233,31 @@ class AudioService : MediaSessionService() {
         }
 
         val currentIndex = exoPlayer.currentMediaItemIndex.coerceAtLeast(0)
-        val currentItem = exoPlayer.currentMediaItem ?: return
-        val currentUri = currentItem.localConfiguration?.uri
+        val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri
         Log.w(
             "SwiftRadio",
             "Svc retry stream reason=$reason attempt=$retryCount delayMs=$delayMs index=$currentIndex uri='$currentUri'"
         )
 
-        mainHandler.postDelayed({
-            val activePlayer = player ?: return@postDelayed
-            // Hard reset renderer pipeline to recover "silent but playing" audio sink states.
+        cancelRetry()
+        retryRunnable = Runnable {
+            val activePlayer = player ?: return@Runnable
+            if (activePlayer.mediaItemCount <= 0) return@Runnable
+            val index = activePlayer.currentMediaItemIndex.coerceIn(0, activePlayer.mediaItemCount - 1)
+            // Re-prepare current item without replacing the playlist.
             activePlayer.stop()
-            activePlayer.setMediaItem(currentItem, 0)
+            activePlayer.seekTo(index, 0)
             activePlayer.prepare()
             activePlayer.play()
-        }, delayMs)
+        }.also {
+            mainHandler.postDelayed(it, delayMs)
+        }
+    }
+
+    private fun cancelRetry() {
+        val runnable = retryRunnable ?: return
+        mainHandler.removeCallbacks(runnable)
+        retryRunnable = null
     }
 
     private fun scheduleBufferingRecovery() {
