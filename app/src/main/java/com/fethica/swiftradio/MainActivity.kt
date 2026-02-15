@@ -60,6 +60,9 @@ class MainActivity : ComponentActivity() {
     private var currentPositionMs by mutableStateOf(0L)
     private var durationMs by mutableStateOf(0L)
     private var positionPollingJob: kotlinx.coroutines.Job? = null
+    private var artworkLookupJob: kotlinx.coroutines.Job? = null
+    private val artworkService = com.fethica.swiftradio.data.ArtworkService()
+    private var lastLookedUpTitle: String = ""
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -179,9 +182,31 @@ class MainActivity : ComponentActivity() {
                 }
 
                 override fun onMediaMetadataChanged(metadata: MediaMetadata) {
-                    trackTitle = metadata.title?.toString() ?: ""
-                    artistName = metadata.artist?.toString() ?: ""
-                    artworkUrl = metadata.artworkUri?.toString()
+                    val newTitle = metadata.title?.toString() ?: ""
+                    val newArtist = metadata.artist?.toString() ?: ""
+                    val streamArtwork = metadata.artworkUri?.toString()
+
+                    trackTitle = newTitle
+                    artistName = newArtist
+
+                    // Use stream-provided artwork if available
+                    if (streamArtwork != null) {
+                        artworkUrl = streamArtwork
+                        lastLookedUpTitle = ""
+                        return
+                    }
+
+                    // Look up via iTunes if title changed and no stream artwork
+                    if (newTitle.isNotBlank() && newTitle != lastLookedUpTitle) {
+                        lastLookedUpTitle = newTitle
+                        artworkLookupJob?.cancel()
+                        artworkLookupJob = lifecycleScope.launch {
+                            val url = artworkService.fetchArtworkUrl(newTitle)
+                            if (url != null) {
+                                artworkUrl = url
+                            }
+                        }
+                    }
                 }
 
                 override fun onEvents(player: Player, events: Player.Events) {
@@ -217,6 +242,8 @@ class MainActivity : ComponentActivity() {
         trackTitle = ""
         artistName = ""
         artworkUrl = null
+        lastLookedUpTitle = ""
+        artworkLookupJob?.cancel()
         controllerFuture.addListener({
             val controller = controllerFuture.get()
             val mediaItem = MediaItem.fromUri(station.streamURL)
