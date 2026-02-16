@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
                                     artistName = state.artistName,
                                     artworkUrl = vm.resolvedArtwork,
                                     isPlaying = state.isPlaying,
+                                    isLive = state.isLive,
                                     onPlayPauseClick = { vm.togglePlayPause() }
                                 )
                             }

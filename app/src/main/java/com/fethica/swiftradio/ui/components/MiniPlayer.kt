@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +40,7 @@ fun MiniPlayer(
     artistName: String,
     artworkUrl: String?,
     isPlaying: Boolean,
+    isLive: Boolean = true,
     onPlayPauseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -93,13 +96,21 @@ fun MiniPlayer(
         }
 
         IconButton(onClick = onPlayPauseClick) {
-            Icon(
-                painter = painterResource(
-                    if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-                ),
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
+            if (isPlaying && isLive) {
+                Icon(
+                    imageVector = Icons.Filled.Stop,
+                    contentDescription = "Stop",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            } else {
+                Icon(
+                    painter = painterResource(
+                        if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }

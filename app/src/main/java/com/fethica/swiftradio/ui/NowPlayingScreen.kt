@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -267,14 +269,23 @@ fun NowPlayingScreen(
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
-                    Icon(
-                        painter = painterResource(
-                            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-                        ),
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
+                    if (isPlaying && isLive) {
+                        Icon(
+                            imageVector = Icons.Filled.Stop,
+                            contentDescription = "Stop",
+                            tint = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(
+                                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                            ),
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.size(32.dp))

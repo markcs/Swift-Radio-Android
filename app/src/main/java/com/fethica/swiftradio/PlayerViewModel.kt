@@ -38,7 +38,8 @@ data class PlayerUiState(
 )
 
 private data class RawPlaybackState(
-    val isPlaying: Boolean = false,
+    val playWhenReady: Boolean = false,
+    val isAudioPlaying: Boolean = false,
     val currentMediaItemIndex: Int = -1,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
     val isLive: Boolean = true,
@@ -183,7 +184,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun togglePlayPause() {
         withController { ctrl ->
-            if (ctrl.isPlaying) ctrl.pause() else ctrl.play()
+            if (ctrl.playWhenReady) {
+                // User wants to stop/pause
+                if (uiState.isLive) {
+                    ctrl.pause()
+                    ctrl.stop()
+                    resetTrackInfo()
+                } else {
+                    ctrl.pause()
+                }
+            } else {
+                // User wants to play
+                if (ctrl.playbackState == Player.STATE_IDLE) {
+                    resetTrackInfo()
+                    ctrl.prepare()
+                }
+                ctrl.play()
+            }
             publishState(ctrl)
         }
     }
@@ -261,13 +278,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun publishState(controller: MediaController, metadataOverride: MediaMetadata? = null) {
         val metadata = metadataOverride ?: lastKnownMetadata
         lastKnownMetadata = metadata
+        val duration = controller.duration.coerceAtLeast(0)
         _rawState.value = RawPlaybackState(
-            isPlaying = controller.isPlaying,
+            playWhenReady = controller.playWhenReady,
+            isAudioPlaying = controller.isPlaying,
             currentMediaItemIndex = controller.currentMediaItemIndex,
             metadata = metadata,
-            isLive = controller.isCurrentMediaItemLive,
+            isLive = controller.isCurrentMediaItemLive || duration <= 0,
             currentPositionMs = controller.currentPosition.coerceAtLeast(0),
-            durationMs = controller.duration.coerceAtLeast(0)
+            durationMs = duration
         )
     }
 
@@ -300,16 +319,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val station = resolveStation(raw.currentMediaItemIndex)
                 uiState = uiState.copy(
                     currentStation = station,
-                    isPlaying = raw.isPlaying,
+                    isPlaying = raw.playWhenReady,
                     isLive = raw.isLive,
                     currentPositionMs = raw.currentPositionMs,
                     durationMs = raw.durationMs
                 )
 
-                val metadataKey = metadataFingerprint(raw.metadata)
-                if (metadataKey != lastMetadataKey) {
-                    lastMetadataKey = metadataKey
-                    applyMetadata(raw.metadata, station)
+                // Only apply metadata when audio is actually playing (not just buffering).
+                // This prevents stale metadata flash on play and keeps defaults during buffering.
+                if (raw.isAudioPlaying) {
+                    val metadataKey = metadataFingerprint(raw.metadata)
+                    if (metadataKey != lastMetadataKey) {
+                        lastMetadataKey = metadataKey
+                        applyMetadata(raw.metadata, station)
+                    }
                 }
             }
         }
