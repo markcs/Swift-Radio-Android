@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +81,7 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit = {},
     hideNextPrevious: Boolean = false
 ) {
+    val context = LocalContext.current
     var showInfoSheet by remember { mutableStateOf(false) }
     val normalizedTitle = trackTitle.trim()
     val normalizedArtist = artistName.trim()
@@ -98,7 +103,7 @@ fun NowPlayingScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         // Blurred background artwork
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
+            model = ImageRequest.Builder(context)
                 .data(artworkUrl)
                 .crossfade(true)
                 .build(),
@@ -138,7 +143,7 @@ fun NowPlayingScreen(
 
             // Artwork
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(context)
                     .data(artworkUrl)
                     .crossfade(true)
                     .build(),
@@ -310,9 +315,19 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* TODO: media output switcher */ }) {
+                IconButton(onClick = {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            context.startActivity(Intent("android.settings.panel.action.MEDIA_OUTPUT"))
+                        } else {
+                            context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        }
+                    } catch (_: Exception) {
+                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    }
+                }) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_audio_output),
+                        imageVector = Icons.Filled.Cast,
                         contentDescription = "Audio output",
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(24.dp)
