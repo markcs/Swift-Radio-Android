@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.SwiftRadio" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.SwiftRadio.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#000000</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.SwiftRadio</item>
+    </style>
 </resources>
