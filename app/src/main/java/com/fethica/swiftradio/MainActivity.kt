@@ -22,7 +22,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fethica.swiftradio.ui.AboutScreen
 import com.fethica.swiftradio.ui.NowPlayingScreen
 import com.fethica.swiftradio.ui.StationsScreen
 import com.fethica.swiftradio.ui.components.MiniPlayer
@@ -77,6 +82,7 @@ class MainActivity : ComponentActivity() {
             }
 
             SwiftRadioTheme {
+                var showAbout by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
                 val bottomSheetState = rememberStandardBottomSheetState(
                     initialValue = SheetValue.Hidden,
@@ -86,7 +92,11 @@ class MainActivity : ComponentActivity() {
                     bottomSheetState = bottomSheetState
                 )
 
-                BottomSheetScaffold(
+                if (showAbout) {
+                    AboutScreen(onBack = { showAbout = false })
+                }
+
+                if (!showAbout) BottomSheetScaffold(
                     scaffoldState = scaffoldState,
                     sheetPeekHeight = 0.dp,
                     sheetDragHandle = null,
@@ -126,7 +136,8 @@ class MainActivity : ComponentActivity() {
                                 scope.launch {
                                     bottomSheetState.partialExpand()
                                 }
-                            }
+                            },
+                            onAboutClick = { showAbout = true }
                         )
 
                         // Mini player overlay at the bottom

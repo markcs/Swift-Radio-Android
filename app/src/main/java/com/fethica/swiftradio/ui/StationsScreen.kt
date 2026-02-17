@@ -17,7 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,12 +49,21 @@ fun StationsScreen(
     currentStation: RadioStation?,
     isPlaying: Boolean,
     showMiniPlayer: Boolean,
-    onStationClick: (RadioStation) -> Unit
+    onStationClick: (RadioStation) -> Unit,
+    onAboutClick: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Swift Radio") },
+                actions = {
+                    IconButton(onClick = onAboutClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = "About"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
