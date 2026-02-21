@@ -381,7 +381,10 @@ fun NowPlayingScreen(
                 IconButton(onClick = {
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            context.startActivity(Intent("android.settings.panel.action.MEDIA_OUTPUT"))
+                            val intent = Intent("android.settings.panel.action.MEDIA_OUTPUT").apply {
+                                putExtra("com.android.settings.panel.extra.PACKAGE_NAME", context.packageName)
+                            }
+                            context.startActivity(intent)
                         } else {
                             context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
                         }
