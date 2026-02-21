@@ -289,7 +289,9 @@ class AudioService : MediaLibraryService() {
     }
 
     private fun loadStationsForBrowse() {
-        val repository = StationsRepository(this)
+        val app = application as SwiftRadioApplication
+        val repository = app.stationsRepository
+
         serviceScope.launch {
             try {
                 val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL

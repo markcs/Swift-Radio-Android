@@ -85,7 +85,7 @@ fun NowPlayingScreen(
     isPlaying: Boolean,
     isBuffering: Boolean = false,
     isLive: Boolean,
-    currentPositionMs: Long,
+    currentPositionProvider: () -> Long,
     durationMs: Long,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
@@ -278,8 +278,9 @@ fun NowPlayingScreen(
                     }
                 } else if (durationMs > 0) {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        val currentMs = currentPositionProvider()
                         val fraction = if (durationMs > 0) {
-                            (currentPositionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                            (currentMs.toFloat() / durationMs).coerceIn(0f, 1f)
                         } else 0f
                         ScrubBar(
                             fraction = fraction,
@@ -293,12 +294,12 @@ fun NowPlayingScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = formatTime(currentPositionMs),
+                                text = formatTime(currentMs),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SubtitleGray
                             )
                             Text(
-                                text = "-${formatTime(durationMs - currentPositionMs)}",
+                                text = "-${formatTime(durationMs - currentMs)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SubtitleGray
                             )

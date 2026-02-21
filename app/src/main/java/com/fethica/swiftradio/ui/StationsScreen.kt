@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -63,6 +65,7 @@ fun StationsScreen(
     currentStation: RadioStation?,
     isPlaying: Boolean,
     isBuffering: Boolean = false,
+    isError: Boolean = false,
     showMiniPlayer: Boolean,
     onStationClick: (RadioStation) -> Unit,
     onAboutClick: () -> Unit = {}
@@ -94,27 +97,40 @@ fun StationsScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                if (stations.isEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
-                ) {
-                    items(stations) { station ->
-                        StationRow(
-                            station = station,
-                            isCurrentStation = station == currentStation,
-                            isPlaying = isPlaying && station == currentStation,
-                            isBuffering = isBuffering && station == currentStation,
-                            onClick = { onStationClick(station) }
+                if (isError) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.error_loading_stations),
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     }
+                } else if (stations.isEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
+                    ) {
+                        items(stations) { station ->
+                            StationRow(
+                                station = station,
+                                isCurrentStation = station == currentStation,
+                                isPlaying = isPlaying && station == currentStation,
+                                isBuffering = isBuffering && station == currentStation,
+                                onClick = { onStationClick(station) }
+                            )
+                        }
+                    }
                 }
-            }
             }
         }
     }

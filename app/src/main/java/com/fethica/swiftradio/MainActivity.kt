@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val vm: PlayerViewModel = viewModel()
+            val vm: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory)
             val state = vm.uiState
             val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                                 isPlaying = state.isPlaying,
                                 isBuffering = state.isBuffering,
                                 isLive = state.isLive,
-                                currentPositionMs = state.currentPositionMs,
+                                currentPositionProvider = { vm.currentPositionMs },
                                 durationMs = state.durationMs,
                                 onPlayPauseClick = { vm.togglePlayPause() },
                                 onNextClick = { vm.nextStation() },
@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
                             currentStation = state.currentStation,
                             isPlaying = state.isPlaying,
                             isBuffering = state.isBuffering,
+                            isError = state.isError,
                             showMiniPlayer = state.currentStation != null,
                             onStationClick = { station ->
                                 vm.playStation(station)

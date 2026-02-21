@@ -10,6 +10,7 @@ import io.ktor.http.ContentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 
 @Serializable
 private data class ITunesResponse(
@@ -21,9 +22,15 @@ private data class ITunesResult(
     val artworkUrl100: String = ""
 )
 
-class ArtworkService(private val artworkSize: Int = 600) {
+class ArtworkService(
+    okHttpClient: OkHttpClient,
+    private val artworkSize: Int = 600
+) {
 
     private val client = HttpClient(OkHttp) {
+        engine {
+            preconfigured = okHttpClient
+        }
         install(ContentNegotiation) {
             json(
                 Json { ignoreUnknownKeys = true },

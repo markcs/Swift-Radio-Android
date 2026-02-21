@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Swift Radio</string>
     <string name="app_title">Swift Radio</string>
+    <string name="error_loading_stations">Failed to load stations.\nPlease check your connection.</string>
 
     <!-- Stations Screen -->
     <string name="cd_about">About</string>

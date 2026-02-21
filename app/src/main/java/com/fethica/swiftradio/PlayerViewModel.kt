@@ -5,11 +5,15 @@ import android.content.ComponentName
 import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -34,8 +38,8 @@ data class PlayerUiState(
     val artistName: String = "",
     val artworkUrl: String? = null,
     val isLive: Boolean = true,
-    val currentPositionMs: Long = 0L,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val isError: Boolean = false
 )
 
 private data class RawPlaybackState(
@@ -45,13 +49,19 @@ private data class RawPlaybackState(
     val currentMediaItemIndex: Int = -1,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
     val isLive: Boolean = true,
-    val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L
 )
 
-class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+class PlayerViewModel(
+    application: Application,
+    private val stationsRepository: StationsRepository,
+    private val artworkService: ArtworkService
+) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf(PlayerUiState())
+        private set
+
+    var currentPositionMs by mutableLongStateOf(0L)
         private set
 
     val resolvedArtwork: String?
@@ -65,14 +75,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val pendingCommands = mutableListOf<(MediaController) -> Unit>()
 
     // StateFlow bridge: Player.Listener → flow → collect → uiState
-    // (updating mutableStateOf directly from Player.Listener callbacks doesn't trigger recomposition)
     private val _rawState = MutableStateFlow(RawPlaybackState())
 
     // Playlist tracking
     private var stationMediaItems: List<MediaItem> = emptyList()
 
     // Metadata/artwork tracking
-    private val artworkService = ArtworkService()
     private var hasUserSelectedStation = false
     private var lastMetadataKey = ""
     private var currentArtworkLookupTerm = ""
@@ -164,6 +172,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         lastKnownMetadata = MediaMetadata.Builder().build()
         _rawState.value = RawPlaybackState()
+        currentPositionMs = 0L
     }
 
     fun playStation(station: RadioStation) {
@@ -281,6 +290,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val metadata = metadataOverride ?: lastKnownMetadata
         lastKnownMetadata = metadata
         val duration = controller.duration.coerceAtLeast(0)
+        
+        currentPositionMs = controller.currentPosition.coerceAtLeast(0)
+        
         _rawState.value = RawPlaybackState(
             playWhenReady = controller.playWhenReady,
             isAudioPlaying = controller.isPlaying,
@@ -289,7 +301,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentMediaItemIndex = controller.currentMediaItemIndex,
             metadata = metadata,
             isLive = controller.isCurrentMediaItemLive || duration <= 0,
-            currentPositionMs = controller.currentPosition.coerceAtLeast(0),
             durationMs = duration
         )
     }
@@ -301,7 +312,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             while (isActive) {
                 val active = this@PlayerViewModel.controller ?: break
                 if (active !== controller || !active.isPlaying) break
-                publishState(active)
+                currentPositionMs = active.currentPosition.coerceAtLeast(0)
                 delay(500)
             }
         }
@@ -326,12 +337,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     isPlaying = raw.playWhenReady,
                     isBuffering = raw.isBuffering,
                     isLive = raw.isLive,
-                    currentPositionMs = raw.currentPositionMs,
                     durationMs = raw.durationMs
                 )
 
                 // Only apply metadata when audio is actually playing (not just buffering).
-                // This prevents stale metadata flash on play and keeps defaults during buffering.
                 if (raw.isAudioPlaying) {
                     val metadataKey = metadataFingerprint(raw.metadata)
                     if (metadataKey != lastMetadataKey) {
@@ -434,9 +443,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentArtworkLookupTerm = lookupTerm
         artworkLookupJob?.cancel()
         artworkLookupJob = viewModelScope.launch {
-            val artworkUrl = artworkService.fetchArtworkUrl(lookupTerm)
-            if (artworkUrl != null && lookupTerm == currentArtworkLookupTerm) {
-                uiState = uiState.copy(artworkUrl = artworkUrl)
+            try {
+                val artworkUrl = artworkService.fetchArtworkUrl(lookupTerm)
+                if (artworkUrl != null && lookupTerm == currentArtworkLookupTerm) {
+                    uiState = uiState.copy(artworkUrl = artworkUrl)
+                }
+            } catch (e: Exception) {
+                Log.w("SwiftRadio", "Failed to load artwork", e)
             }
         }
     }
@@ -451,10 +464,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun loadStations() {
-        val repository = StationsRepository(getApplication())
         viewModelScope.launch {
-            val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
-            uiState = uiState.copy(stations = repository.loadStations(remoteUrl))
+            try {
+                val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
+                uiState = uiState.copy(
+                    stations = stationsRepository.loadStations(remoteUrl),
+                    isError = false
+                )
+            } catch (e: Exception) {
+                Log.e("SwiftRadio", "Failed to load stations", e)
+                uiState = uiState.copy(isError = true)
+            }
         }
     }
 
@@ -527,5 +547,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         return null
+    }
+
+    companion object {
+        val Factory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(
+                modelClass: Class<T>,
+                extras: CreationExtras
+            ): T {
+                val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]) as SwiftRadioApplication
+                return PlayerViewModel(
+                    application,
+                    application.stationsRepository,
+                    application.artworkService
+                ) as T
+            }
+        }
     }
 }
