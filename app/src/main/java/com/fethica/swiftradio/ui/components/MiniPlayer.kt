@@ -1,5 +1,10 @@
 package com.fethica.swiftradio.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,7 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -65,17 +70,23 @@ fun MiniPlayer(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(artworkUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = stationName,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-        )
+        AnimatedContent(
+            targetState = artworkUrl,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "miniArtwork"
+        ) { url ->
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = stationName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 
@@ -99,7 +110,7 @@ fun MiniPlayer(
             if (isPlaying && isLive) {
                 Icon(
                     imageVector = Icons.Filled.Stop,
-                    contentDescription = "Stop",
+                    contentDescription = stringResource(R.string.cd_stop),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             } else {
@@ -107,7 +118,7 @@ fun MiniPlayer(
                     painter = painterResource(
                         if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                     ),
-                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    contentDescription = stringResource(if (isPlaying) R.string.cd_pause else R.string.cd_play),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }

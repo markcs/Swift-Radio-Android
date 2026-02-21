@@ -33,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.fethica.swiftradio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +70,7 @@ fun StationInfoSheet(
             if (hasLongDesc) {
                 SheetRow(
                     icon = Icons.Outlined.Info,
-                    label = "About Station",
+                    label = stringResource(R.string.info_about_station),
                     onClick = null
                 )
                 Text(
@@ -84,7 +86,7 @@ fun StationInfoSheet(
             if (hasWebsite) {
                 SheetRow(
                     icon = Icons.Outlined.Language,
-                    label = "Station Website",
+                    label = stringResource(R.string.info_station_website),
                     onClick = { openUrl(context, website) }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -95,7 +97,7 @@ fun StationInfoSheet(
                 val searchQuery = buildSearchQuery(artistName, trackTitle)
                 SheetRow(
                     icon = Icons.Outlined.MusicNote,
-                    label = "Search in Music App",
+                    label = stringResource(R.string.info_search_music),
                     onClick = { searchMusic(context, searchQuery) }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -104,7 +106,7 @@ fun StationInfoSheet(
             // Share Now Playing
             SheetRow(
                 icon = Icons.Outlined.Share,
-                label = "Share Now Playing",
+                label = stringResource(R.string.info_share_now_playing),
                 onClick = {
                     shareNowPlaying(context, stationName, trackTitle, artistName)
                 }
@@ -164,15 +166,15 @@ private fun shareNowPlaying(
         val parts = mutableListOf<String>()
         if (artistName.isNotBlank()) parts.add(artistName)
         parts.add(trackTitle)
-        "Listening to ${parts.joinToString(" - ")} on $stationName"
+        context.getString(R.string.share_listening_track, parts.joinToString(" - "), stationName)
     } else {
-        "Listening to $stationName"
+        context.getString(R.string.share_listening_station, stationName)
     }
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, "Share Now Playing"))
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.info_share_now_playing)))
 }
 
 private fun buildSearchQuery(artistName: String, trackTitle: String): String {

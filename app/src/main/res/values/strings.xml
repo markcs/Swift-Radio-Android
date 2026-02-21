@@ -1,3 +1,78 @@
 <resources>
     <string name="app_name">Swift Radio</string>
+    <string name="app_title">Swift Radio</string>
+
+    <!-- Stations Screen -->
+    <string name="cd_about">About</string>
+
+    <!-- Now Playing Screen -->
+    <string name="player_live">LIVE</string>
+    <string name="cd_previous">Previous</string>
+    <string name="cd_next">Next</string>
+    <string name="cd_stop">Stop</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_audio_output">Audio output</string>
+    <string name="cd_more_options">More options</string>
+
+    <!-- Station Info Sheet -->
+    <string name="info_about_station">About Station</string>
+    <string name="info_station_website">Station Website</string>
+    <string name="info_search_music">Search in Music App</string>
+    <string name="info_share_now_playing">Share Now Playing</string>
+    <string name="share_listening_track">Listening to %1$s on %2$s</string>
+    <string name="share_listening_station">Listening to %1$s</string>
+
+    <!-- About Screen -->
+    <string name="about_title">About Swift Radio</string>
+    <string name="cd_back">Back</string>
+    <string name="about_header_part1">" is a fully featured, open-source radio station app for Android, written entirely in "</string>
+    <string name="about_header_kotlin">Kotlin</string>
+    <string name="about_header_part2">" with "</string>
+    <string name="about_header_compose">Jetpack Compose</string>
+    <string name="about_header_part3">". It provides robust, professional functionality out of the box, making it the perfect foundation for "</string>
+    <string name="about_header_building">building</string>
+    <string name="about_header_part4">" or "</string>
+    <string name="about_header_customizing">customizing</string>
+    <string name="about_header_part5">" your own streaming radio experience."</string>
+
+    <!-- About Screen - Sections -->
+    <string name="about_section_features">Features</string>
+    <string name="about_section_contact">Contact</string>
+    <string name="about_section_support">Support</string>
+    <string name="about_section_credits">Credits</string>
+    <string name="about_section_legal">Legal</string>
+    <string name="about_section_version">Version</string>
+
+    <!-- About Screen - Rows -->
+    <string name="about_email">Email</string>
+    <string name="about_feedback">Feedback</string>
+    <string name="about_feedback_subtitle">We value your input!</string>
+    <string name="about_rate">Rate the App</string>
+    <string name="about_share">Share the App</string>
+    <string name="about_license">License</string>
+    <string name="about_license_subtitle">MIT License</string>
+    <string name="about_app_version">App Version</string>
+    <string name="about_email_subject">From Swift Radio App</string>
+    <string name="about_share_chooser">Share</string>
+
+    <!-- About Screen - Footer -->
+    <string name="about_authors">Fethi El Hassasna &amp; Matt Fecher</string>
+    <string name="about_copyright">Copyright \u00A9 %1$d Swift Radio</string>
+
+    <!-- Features -->
+    <string name="feature_kotlin_title">Kotlin Codebase</string>
+    <string name="feature_kotlin_subtitle">Entirely written in Kotlin with Jetpack Compose and a clean, modern architecture.</string>
+    <string name="feature_auto_title">Android Auto Support</string>
+    <string name="feature_auto_subtitle">Lets users control their radio playback directly from their car display.</string>
+    <string name="feature_ui_title">Customizable UI</string>
+    <string name="feature_ui_subtitle">Includes a flexible interface that you can easily personalize with your own theme and branding.</string>
+    <string name="feature_metadata_title">Album Art &amp; Metadata</string>
+    <string name="feature_metadata_subtitle">Displays track information and album covers from streams and the iTunes API.</string>
+    <string name="feature_lockscreen_title">Lock Screen &amp; Notification Controls</string>
+    <string name="feature_lockscreen_subtitle">Shows artwork and track info on the lock screen and notification, with full playback controls.</string>
+    <string name="feature_stations_title">Multiple Stations</string>
+    <string name="feature_stations_subtitle">Comes with a straightforward station list that supports multiple streaming URLs from a local or remote JSON.</string>
+    <string name="feature_setup_title">Easy Project Setup</string>
+    <string name="feature_setup_subtitle">Ready to run right out of the box. Adjust key settings in a single configuration file.</string>
 </resources>

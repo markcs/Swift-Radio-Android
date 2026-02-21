@@ -1,6 +1,9 @@
 package com.fethica.swiftradio.ui
 
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,18 +32,28 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.fethica.swiftradio.R
 import com.fethica.swiftradio.data.RadioStation
 import com.fethica.swiftradio.ui.components.EqualizerAnimation
+import com.fethica.swiftradio.ui.components.GradientBackground
 import com.fethica.swiftradio.ui.theme.SubtitleGray
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,6 +62,7 @@ fun StationsScreen(
     stations: List<RadioStation>,
     currentStation: RadioStation?,
     isPlaying: Boolean,
+    isBuffering: Boolean = false,
     showMiniPlayer: Boolean,
     onStationClick: (RadioStation) -> Unit,
     onAboutClick: () -> Unit = {}
@@ -55,12 +70,12 @@ fun StationsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Swift Radio") },
+                title = { Text(stringResource(R.string.app_title)) },
                 actions = {
                     IconButton(onClick = onAboutClick) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
-                            contentDescription = "About"
+                            contentDescription = stringResource(R.string.cd_about)
                         )
                     }
                 },
@@ -71,19 +86,35 @@ fun StationsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
-        ) {
-            items(stations) { station ->
-                StationRow(
-                    station = station,
-                    isCurrentStation = station == currentStation,
-                    isPlaying = isPlaying && station == currentStation,
-                    onClick = { onStationClick(station) }
+        Box(modifier = Modifier.fillMaxSize()) {
+            GradientBackground()
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                if (stations.isEmpty()) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = MaterialTheme.colorScheme.primary
                 )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
+                ) {
+                    items(stations) { station ->
+                        StationRow(
+                            station = station,
+                            isCurrentStation = station == currentStation,
+                            isPlaying = isPlaying && station == currentStation,
+                            isBuffering = isBuffering && station == currentStation,
+                            onClick = { onStationClick(station) }
+                        )
+                    }
+                }
+            }
             }
         }
     }
@@ -94,13 +125,30 @@ private fun StationRow(
     station: RadioStation,
     isCurrentStation: Boolean,
     isPlaying: Boolean,
+    isBuffering: Boolean = false,
     onClick: () -> Unit
 ) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "cardScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 5.dp)
-            .clickable(onClick = onClick),
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrentStation) {
@@ -129,17 +177,43 @@ private fun StationRow(
                 }
             }
 
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(imageModel)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = station.name,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(70.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
+                    .clip(RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = station.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Buffering overlay on artwork
+                Crossfade(
+                    targetState = isBuffering,
+                    label = "bufferingOverlay"
+                ) { buffering ->
+                    if (buffering) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(14.dp))
 

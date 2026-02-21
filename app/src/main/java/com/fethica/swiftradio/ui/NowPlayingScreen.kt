@@ -1,6 +1,19 @@
 package com.fethica.swiftradio.ui
 
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,9 +21,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -18,11 +31,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,25 +54,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.fethica.swiftradio.R
+import com.fethica.swiftradio.ui.components.GradientBackground
 import com.fethica.swiftradio.ui.components.StationInfoSheet
 import com.fethica.swiftradio.ui.theme.SubtitleGray
 
@@ -72,6 +83,7 @@ fun NowPlayingScreen(
     artistName: String,
     artworkUrl: String?,
     isPlaying: Boolean,
+    isBuffering: Boolean = false,
     isLive: Boolean,
     currentPositionMs: Long,
     durationMs: Long,
@@ -101,18 +113,24 @@ fun NowPlayingScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Blurred background artwork
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(artworkUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(60.dp)
-        )
+        // Blurred background artwork with animated transition
+        AnimatedContent(
+            targetState = artworkUrl,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "bgArtwork"
+        ) { url ->
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(60.dp)
+            )
+        }
 
         // Dark overlay
         Box(
@@ -120,6 +138,9 @@ fun NowPlayingScreen(
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.75f))
         )
+
+        // Gradient overlay
+        GradientBackground()
 
         // Content
         Column(
@@ -141,19 +162,60 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Artwork
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(artworkUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = stationName,
-                contentScale = ContentScale.Crop,
+            // Artwork with buffering overlay and play/pause scale animation
+            val artworkScale by animateFloatAsState(
+                targetValue = if (isPlaying) 1f else 0.85f,
+                animationSpec = spring(dampingRatio = 0.7f),
+                label = "artworkScale"
+            )
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
-            )
+                    .graphicsLayer {
+                        scaleX = artworkScale
+                        scaleY = artworkScale
+                    }
+                    .clip(RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(
+                    targetState = artworkUrl,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "artwork"
+                ) { url ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(url)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = stationName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Buffering overlay
+                Crossfade(
+                    targetState = isBuffering,
+                    label = "bufferingOverlay"
+                ) { buffering ->
+                    if (buffering) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -204,7 +266,7 @@ fun NowPlayingScreen(
                             thickness = 1.dp
                         )
                         Text(
-                            text = "LIVE",
+                            text = stringResource(R.string.player_live),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.7f),
                             fontWeight = FontWeight.Bold,
@@ -258,7 +320,7 @@ fun NowPlayingScreen(
                     IconButton(onClick = onPreviousClick, modifier = Modifier.size(48.dp)) {
                         Icon(
                             painter = painterResource(R.drawable.ic_previous),
-                            contentDescription = "Previous",
+                            contentDescription = stringResource(R.string.cd_previous),
                             tint = Color.White,
                             modifier = Modifier.size(32.dp)
                         )
@@ -277,7 +339,7 @@ fun NowPlayingScreen(
                     if (isPlaying && isLive) {
                         Icon(
                             imageVector = Icons.Filled.Stop,
-                            contentDescription = "Stop",
+                            contentDescription = stringResource(R.string.cd_stop),
                             tint = Color.White,
                             modifier = Modifier.size(36.dp)
                         )
@@ -286,7 +348,7 @@ fun NowPlayingScreen(
                             painter = painterResource(
                                 if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                             ),
-                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            contentDescription = stringResource(if (isPlaying) R.string.cd_pause else R.string.cd_play),
                             tint = Color.White,
                             modifier = Modifier.size(36.dp)
                         )
@@ -299,7 +361,7 @@ fun NowPlayingScreen(
                     IconButton(onClick = onNextClick, modifier = Modifier.size(48.dp)) {
                         Icon(
                             painter = painterResource(R.drawable.ic_next),
-                            contentDescription = "Next",
+                            contentDescription = stringResource(R.string.cd_next),
                             tint = Color.White,
                             modifier = Modifier.size(32.dp)
                         )
@@ -328,7 +390,7 @@ fun NowPlayingScreen(
                 }) {
                     Icon(
                         imageVector = Icons.Filled.Cast,
-                        contentDescription = "Audio output",
+                        contentDescription = stringResource(R.string.cd_audio_output),
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(24.dp)
                     )
@@ -339,7 +401,7 @@ fun NowPlayingScreen(
                 IconButton(onClick = { showInfoSheet = true }) {
                     Icon(
                         painter = painterResource(R.drawable.ic_more),
-                        contentDescription = "More options",
+                        contentDescription = stringResource(R.string.cd_more_options),
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(24.dp)
                     )

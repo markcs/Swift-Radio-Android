@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -79,12 +80,12 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About Swift Radio") },
+                title = { Text(stringResource(R.string.about_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.cd_back)
                         )
                     }
                 },
@@ -105,16 +106,16 @@ fun AboutScreen(
             // Header
             Text(
                 text = buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Swift Radio") }
-                    append(" is a fully featured, open-source radio station app for Android, written entirely in ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Kotlin") }
-                    append(" with ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Jetpack Compose") }
-                    append(". It provides robust, professional functionality out of the box, making it the perfect foundation for ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("building") }
-                    append(" or ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("customizing") }
-                    append(" your own streaming radio experience.")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.app_title)) }
+                    append(stringResource(R.string.about_header_part1))
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.about_header_kotlin)) }
+                    append(stringResource(R.string.about_header_part2))
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.about_header_compose)) }
+                    append(stringResource(R.string.about_header_part3))
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.about_header_building)) }
+                    append(stringResource(R.string.about_header_part4))
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.about_header_customizing)) }
+                    append(stringResource(R.string.about_header_part5))
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = SubtitleGray,
@@ -122,52 +123,52 @@ fun AboutScreen(
             )
 
             // Features
-            SectionHeader("Features")
+            SectionHeader(stringResource(R.string.about_section_features))
             SectionCard {
                 AboutRow(
                     icon = Icons.AutoMirrored.Filled.List,
-                    title = "Features",
+                    title = stringResource(R.string.about_section_features),
                     onClick = null
                 )
             }
             features.forEach { feature ->
-                FeatureRow(icon = feature.icon, title = feature.title, subtitle = feature.subtitle)
+                FeatureRow(icon = feature.icon, title = stringResource(feature.titleRes), subtitle = stringResource(feature.subtitleRes))
             }
 
             // Contact
-            SectionHeader("Contact")
+            SectionHeader(stringResource(R.string.about_section_contact))
             SectionCard {
                 AboutRow(
                     icon = Icons.Filled.Email,
-                    title = "Email",
+                    title = stringResource(R.string.about_email),
                     subtitle = Config.email,
                     onClick = { openEmail(context) }
                 )
                 AboutRow(
                     icon = Icons.Filled.Feedback,
-                    title = "Feedback",
-                    subtitle = "We value your input!",
+                    title = stringResource(R.string.about_feedback),
+                    subtitle = stringResource(R.string.about_feedback_subtitle),
                     onClick = { openUrl(context, Config.feedbackURL) }
                 )
             }
 
             // Support
-            SectionHeader("Support")
+            SectionHeader(stringResource(R.string.about_section_support))
             SectionCard {
                 AboutRow(
                     icon = Icons.Filled.Star,
-                    title = "Rate the App",
+                    title = stringResource(R.string.about_rate),
                     onClick = { openPlayStore(context) }
                 )
                 AboutRow(
                     icon = Icons.Filled.Share,
-                    title = "Share the App",
+                    title = stringResource(R.string.about_share),
                     onClick = { shareApp(context) }
                 )
             }
 
             // Credits
-            SectionHeader("Credits")
+            SectionHeader(stringResource(R.string.about_section_credits))
             SectionCard {
                 Config.libraries.forEach { lib ->
                     AboutRow(
@@ -181,22 +182,22 @@ fun AboutScreen(
             }
 
             // Legal
-            SectionHeader("Legal")
+            SectionHeader(stringResource(R.string.about_section_legal))
             SectionCard {
                 AboutRow(
                     icon = Icons.Filled.Gavel,
-                    title = "License",
-                    subtitle = "MIT License",
+                    title = stringResource(R.string.about_license),
+                    subtitle = stringResource(R.string.about_license_subtitle),
                     onClick = { openUrl(context, Config.licenseURL) }
                 )
             }
 
             // Version
-            SectionHeader("Version")
+            SectionHeader(stringResource(R.string.about_section_version))
             SectionCard {
                 AboutRow(
                     icon = Icons.Filled.Info,
-                    title = "App Version",
+                    title = stringResource(R.string.about_app_version),
                     subtitle = appVersion,
                     onClick = null
                 )
@@ -211,18 +212,18 @@ fun AboutScreen(
             ) {
                 AsyncImage(
                     model = R.mipmap.ic_launcher_round,
-                    contentDescription = "Swift Radio",
+                    contentDescription = stringResource(R.string.app_title),
                     modifier = Modifier.size(60.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Fethi El Hassasna & Matt Fecher",
+                    text = stringResource(R.string.about_authors),
                     style = MaterialTheme.typography.bodySmall,
                     color = SubtitleGray,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "Copyright \u00A9 ${Calendar.getInstance().get(Calendar.YEAR)} Swift Radio",
+                    text = stringResource(R.string.about_copyright, Calendar.getInstance().get(Calendar.YEAR)),
                     style = MaterialTheme.typography.bodySmall,
                     color = SubtitleGray,
                     textAlign = TextAlign.Center
@@ -345,7 +346,7 @@ private fun FeatureRow(icon: ImageVector, title: String, subtitle: String) {
 private fun openEmail(context: Context) {
     val intent = Intent(Intent.ACTION_SENDTO).apply {
         data = Uri.parse("mailto:${Config.email}")
-        putExtra(Intent.EXTRA_SUBJECT, "From Swift Radio App")
+        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.about_email_subject))
     }
     try { context.startActivity(intent) } catch (_: Exception) {}
 }
@@ -370,19 +371,19 @@ private fun shareApp(context: Context) {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, Config.shareText)
     }
-    context.startActivity(Intent.createChooser(intent, "Share"))
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.about_share_chooser)))
 }
 
 // --- Features data ---
 
-private data class Feature(val icon: ImageVector, val title: String, val subtitle: String)
+private data class Feature(val icon: ImageVector, val titleRes: Int, val subtitleRes: Int)
 
 private val features = listOf(
-    Feature(Icons.Filled.Code, "Kotlin Codebase", "Entirely written in Kotlin with Jetpack Compose and a clean, modern architecture."),
-    Feature(Icons.Filled.DirectionsCar, "Android Auto Support", "Lets users control their radio playback directly from their car display."),
-    Feature(Icons.Filled.Palette, "Customizable UI", "Includes a flexible interface that you can easily personalize with your own theme and branding."),
-    Feature(Icons.Filled.MusicNote, "Album Art & Metadata", "Displays track information and album covers from streams and the iTunes API."),
-    Feature(Icons.Filled.Lock, "Lock Screen & Notification Controls", "Shows artwork and track info on the lock screen and notification, with full playback controls."),
-    Feature(Icons.Filled.Radio, "Multiple Stations", "Comes with a straightforward station list that supports multiple streaming URLs from a local or remote JSON."),
-    Feature(Icons.Filled.Verified, "Easy Project Setup", "Ready to run right out of the box. Adjust key settings in a single configuration file."),
+    Feature(Icons.Filled.Code, R.string.feature_kotlin_title, R.string.feature_kotlin_subtitle),
+    Feature(Icons.Filled.DirectionsCar, R.string.feature_auto_title, R.string.feature_auto_subtitle),
+    Feature(Icons.Filled.Palette, R.string.feature_ui_title, R.string.feature_ui_subtitle),
+    Feature(Icons.Filled.MusicNote, R.string.feature_metadata_title, R.string.feature_metadata_subtitle),
+    Feature(Icons.Filled.Lock, R.string.feature_lockscreen_title, R.string.feature_lockscreen_subtitle),
+    Feature(Icons.Filled.Radio, R.string.feature_stations_title, R.string.feature_stations_subtitle),
+    Feature(Icons.Filled.Verified, R.string.feature_setup_title, R.string.feature_setup_subtitle),
 )

@@ -29,6 +29,7 @@ data class PlayerUiState(
     val stations: List<RadioStation> = emptyList(),
     val currentStation: RadioStation? = null,
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val trackTitle: String = "",
     val artistName: String = "",
     val artworkUrl: String? = null,
@@ -40,6 +41,7 @@ data class PlayerUiState(
 private data class RawPlaybackState(
     val playWhenReady: Boolean = false,
     val isAudioPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val currentMediaItemIndex: Int = -1,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
     val isLive: Boolean = true,
@@ -282,6 +284,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _rawState.value = RawPlaybackState(
             playWhenReady = controller.playWhenReady,
             isAudioPlaying = controller.isPlaying,
+            isBuffering = controller.playWhenReady &&
+                (controller.playbackState == Player.STATE_BUFFERING || controller.playbackState == Player.STATE_IDLE),
             currentMediaItemIndex = controller.currentMediaItemIndex,
             metadata = metadata,
             isLive = controller.isCurrentMediaItemLive || duration <= 0,
@@ -320,6 +324,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 uiState = uiState.copy(
                     currentStation = station,
                     isPlaying = raw.playWhenReady,
+                    isBuffering = raw.isBuffering,
                     isLive = raw.isLive,
                     currentPositionMs = raw.currentPositionMs,
                     durationMs = raw.durationMs

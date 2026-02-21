@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
                                 artistName = state.artistName,
                                 artworkUrl = vm.resolvedArtwork,
                                 isPlaying = state.isPlaying,
+                                isBuffering = state.isBuffering,
                                 isLive = state.isLive,
                                 currentPositionMs = state.currentPositionMs,
                                 durationMs = state.durationMs,
@@ -132,6 +133,7 @@ class MainActivity : ComponentActivity() {
                             stations = state.stations,
                             currentStation = state.currentStation,
                             isPlaying = state.isPlaying,
+                            isBuffering = state.isBuffering,
                             showMiniPlayer = state.currentStation != null,
                             onStationClick = { station ->
                                 vm.playStation(station)
@@ -148,11 +150,10 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 4.dp)
                                     .clickable {
                                         scope.launch { bottomSheetState.expand() }
                                     },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
                                 color = MaterialTheme.colorScheme.surface,
                                 shadowElevation = 8.dp
                             ) {
