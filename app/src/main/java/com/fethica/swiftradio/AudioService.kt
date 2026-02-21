@@ -260,7 +260,10 @@ class AudioService : MediaLibraryService() {
             .build()
         exoPlayer.setAudioAttributes(audioAttributes, true)
         exoPlayer.volume = 1f
-        exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
+        
+        // Loop playlist when requested from Android Auto so prev/next works infinitely
+        exoPlayer.repeatMode = Player.REPEAT_MODE_ALL
+
         exoPlayer.addListener(playerListener)
         player = exoPlayer
         logAudioOutputState("onCreate")

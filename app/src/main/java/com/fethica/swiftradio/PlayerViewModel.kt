@@ -46,7 +46,7 @@ private data class RawPlaybackState(
     val playWhenReady: Boolean = false,
     val isAudioPlaying: Boolean = false,
     val isBuffering: Boolean = false,
-    val currentMediaItemIndex: Int = -1,
+    val mediaId: String? = null,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
     val isLive: Boolean = true,
     val durationMs: Long = 0L
@@ -85,7 +85,7 @@ class PlayerViewModel(
     private var lastMetadataKey = ""
     private var currentArtworkLookupTerm = ""
     private var artworkLookupJob: Job? = null
-    private var lastObservedMediaItemIndex = -1
+    private var lastObservedMediaId: String? = null
     private var positionPollingJob: Job? = null
     private var lastKnownMetadata: MediaMetadata = MediaMetadata.Builder().build()
 
@@ -219,11 +219,9 @@ class PlayerViewModel(
     fun nextStation() {
         if (uiState.stations.isEmpty() || stationMediaItems.isEmpty()) return
         hasUserSelectedStation = true
-        val currentIndex = controller?.currentMediaItemIndex
-            ?.takeIf { it in stationMediaItems.indices }
-            ?: uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 }
-            ?: 0
-        val nextIndex = (currentIndex + 1) % stationMediaItems.size
+        val currentStationIndex = uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 } ?: 0
+        val nextIndex = (currentStationIndex + 1) % stationMediaItems.size
+        
         resetTrackInfo()
         uiState = uiState.copy(currentStation = uiState.stations.getOrNull(nextIndex))
         withController { ctrl ->
@@ -234,11 +232,9 @@ class PlayerViewModel(
     fun previousStation() {
         if (uiState.stations.isEmpty() || stationMediaItems.isEmpty()) return
         hasUserSelectedStation = true
-        val currentIndex = controller?.currentMediaItemIndex
-            ?.takeIf { it in stationMediaItems.indices }
-            ?: uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 }
-            ?: 0
-        val prevIndex = (currentIndex - 1 + stationMediaItems.size) % stationMediaItems.size
+        val currentStationIndex = uiState.stations.indexOf(uiState.currentStation).takeIf { it >= 0 } ?: 0
+        val prevIndex = (currentStationIndex - 1 + stationMediaItems.size) % stationMediaItems.size
+        
         resetTrackInfo()
         uiState = uiState.copy(currentStation = uiState.stations.getOrNull(prevIndex))
         withController { ctrl ->
@@ -298,7 +294,7 @@ class PlayerViewModel(
             isAudioPlaying = controller.isPlaying,
             isBuffering = controller.playWhenReady &&
                 (controller.playbackState == Player.STATE_BUFFERING || controller.playbackState == Player.STATE_IDLE),
-            currentMediaItemIndex = controller.currentMediaItemIndex,
+            mediaId = controller.currentMediaItem?.mediaId,
             metadata = metadata,
             isLive = controller.isCurrentMediaItemLive || duration <= 0,
             durationMs = duration
@@ -324,14 +320,14 @@ class PlayerViewModel(
         viewModelScope.launch {
             _rawState.collect { raw ->
                 if (hasUserSelectedStation &&
-                    raw.currentMediaItemIndex >= 0 &&
-                    raw.currentMediaItemIndex != lastObservedMediaItemIndex
+                    raw.mediaId != null &&
+                    raw.mediaId != lastObservedMediaId
                 ) {
                     resetTrackInfo()
                 }
-                lastObservedMediaItemIndex = raw.currentMediaItemIndex
+                lastObservedMediaId = raw.mediaId
 
-                val station = resolveStation(raw.currentMediaItemIndex)
+                val station = resolveStation(raw.mediaId)
                 uiState = uiState.copy(
                     currentStation = station,
                     isPlaying = raw.playWhenReady,
@@ -352,9 +348,17 @@ class PlayerViewModel(
         }
     }
 
-    private fun resolveStation(index: Int): RadioStation? {
-        if (!hasUserSelectedStation) return uiState.currentStation
-        return uiState.stations.getOrNull(index) ?: uiState.currentStation
+    private fun resolveStation(mediaId: String?): RadioStation? {
+        if (!hasUserSelectedStation && mediaId == null) return uiState.currentStation
+        
+        if (mediaId != null && mediaId.startsWith("station_")) {
+            val index = mediaId.removePrefix("station_").toIntOrNull()
+            if (index != null && index in uiState.stations.indices) {
+                return uiState.stations[index]
+            }
+        }
+        
+        return uiState.currentStation
     }
 
     // --- Metadata processing ---
@@ -471,6 +475,7 @@ class PlayerViewModel(
                     stations = stationsRepository.loadStations(remoteUrl),
                     isError = false
                 )
+                stationMediaItems = buildMediaItems(uiState.stations)
             } catch (e: Exception) {
                 Log.e("SwiftRadio", "Failed to load stations", e)
                 uiState = uiState.copy(isError = true)
@@ -479,9 +484,10 @@ class PlayerViewModel(
     }
 
     private fun buildMediaItems(stations: List<RadioStation>): List<MediaItem> {
-        return stations.map { station ->
+        return stations.mapIndexed { index, station ->
             val imageUri = station.resolvedImageUrl
             MediaItem.Builder()
+                .setMediaId("station_$index")
                 .setUri(station.streamURL)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
