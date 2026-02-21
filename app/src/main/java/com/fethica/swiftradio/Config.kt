@@ -9,6 +9,7 @@ object Config {
     const val stationsURL = "https://fethica.com/assets/swift-radio/stations.json"
 
     const val hideNextPreviousButtons = false
+    const val enableSearch = true // Toggle to show/hide search bar on the Stations Screen
 
     const val email = "contact@fethica.com"
     const val feedbackURL = "https://fethica.com/#contact"

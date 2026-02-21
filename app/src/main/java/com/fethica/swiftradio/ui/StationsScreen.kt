@@ -1,7 +1,10 @@
 package com.fethica.swiftradio.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -24,10 +27,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -52,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.fethica.swiftradio.Config
 import com.fethica.swiftradio.R
 import com.fethica.swiftradio.data.RadioStation
 import com.fethica.swiftradio.ui.components.EqualizerAnimation
@@ -70,11 +78,36 @@ fun StationsScreen(
     onStationClick: (RadioStation) -> Unit,
     onAboutClick: () -> Unit = {}
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+
+    val filteredStations = remember(searchQuery, stations) {
+        if (searchQuery.isBlank()) {
+            stations
+        } else {
+            stations.filter {
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                it.desc.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_title)) },
                 actions = {
+                    if (Config.enableSearch) {
+                        IconButton(onClick = {
+                            isSearchActive = !isSearchActive
+                            if (!isSearchActive) searchQuery = ""
+                        }) {
+                            Icon(
+                                imageVector = if (isSearchActive) Icons.Filled.Close else Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.cd_search)
+                            )
+                        }
+                    }
                     IconButton(onClick = onAboutClick) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
@@ -92,42 +125,65 @@ fun StationsScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             GradientBackground()
 
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                if (isError) {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.error_loading_stations),
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyLarge
+                AnimatedVisibility(
+                    visible = isSearchActive,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text(stringResource(R.string.search_hint)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                         )
-                    }
-                } else if (stations.isEmpty()) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
-                    ) {
-                        items(stations, key = { it.streamURL }) { station ->
-                            StationRow(
-                                station = station,
-                                isCurrentStation = station == currentStation,
-                                isPlaying = isPlaying && station == currentStation,
-                                isBuffering = isBuffering && station == currentStation,
-                                onClick = { onStationClick(station) }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    if (isError) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.error_loading_stations),
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyLarge
                             )
+                        }
+                    } else if (stations.isEmpty()) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
+                        ) {
+                            items(filteredStations, key = { it.streamURL }) { station ->
+                                StationRow(
+                                    station = station,
+                                    isCurrentStation = station == currentStation,
+                                    isPlaying = isPlaying && station == currentStation,
+                                    isBuffering = isBuffering && station == currentStation,
+                                    onClick = { onStationClick(station) }
+                                )
+                            }
                         }
                     }
                 }
