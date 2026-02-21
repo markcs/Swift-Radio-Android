@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -110,7 +111,7 @@ fun StationsScreen(
                     }
                     IconButton(onClick = onAboutClick) {
                         Icon(
-                            imageVector = Icons.Outlined.Info,
+                            imageVector = Icons.Outlined.Settings,
                             contentDescription = stringResource(R.string.cd_about)
                         )
                     }
