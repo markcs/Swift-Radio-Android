@@ -2,8 +2,6 @@ package com.fethica.swiftradio
 
 import android.media.AudioManager
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -30,8 +28,11 @@ import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,10 +40,11 @@ class AudioService : MediaLibraryService() {
 
     private var mediaSession: MediaLibrarySession? = null
     private var player: ExoPlayer? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var retryRunnable: Runnable? = null
-    private var bufferingRecoveryRunnable: Runnable? = null
-    private var stallRecoveryRunnable: Runnable? = null
+    
+    private var retryJob: Job? = null
+    private var bufferingRecoveryJob: Job? = null
+    private var stallRecoveryJob: Job? = null
+    
     private var retryCount = 0
     private var lastObservedPositionMs: Long = 0L
     private var lastPositionRealtimeMs: Long = 0L
@@ -59,25 +61,31 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "root"
         private const val STATIONS_ID = "stations"
+        private const val TAG = "AudioService"
     }
 
     private val playerListener = object : Player.Listener {
         override fun onMetadata(metadata: Metadata) {
             val exoPlayer = player ?: return
-            val icyTitle = extractIcyTitle(metadata) ?: return
-            val parsedMetadata = buildTrackMetadataFromIcy(icyTitle)
-            if (trackMetadataEquivalent(exoPlayer.playlistMetadata, parsedMetadata)) return
-            Log.d(
-                "SwiftRadio",
-                "Svc ICY metadata raw='$icyTitle' title='${parsedMetadata.title}' artist='${parsedMetadata.artist}'"
-            )
-            exoPlayer.setPlaylistMetadata(parsedMetadata)
+            serviceScope.launch(Dispatchers.Default) {
+                val icyTitle = extractIcyTitle(metadata) ?: return@launch
+                val parsedMetadata = buildTrackMetadataFromIcy(icyTitle)
+                
+                withContext(Dispatchers.Main) {
+                    if (trackMetadataEquivalent(exoPlayer.playlistMetadata, parsedMetadata)) return@withContext
+                    Log.d(
+                        TAG,
+                        "Svc ICY metadata raw='$icyTitle' title='${parsedMetadata.title}' artist='${parsedMetadata.artist}'"
+                    )
+                    exoPlayer.setPlaylistMetadata(parsedMetadata)
+                }
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val exoPlayer = player ?: return
             Log.d(
-                "SwiftRadio",
+                TAG,
                 "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'"
             )
             cancelRetry()
@@ -88,7 +96,7 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            Log.e("SwiftRadio", "Svc player error: ${error.errorCodeName} ${error.message}", error)
+            Log.e(TAG, "Svc player error: ${error.errorCodeName} ${error.message}", error)
             retryCurrentItem("player_error")
         }
 
@@ -102,7 +110,7 @@ class AudioService : MediaLibraryService() {
             }
             val exoPlayer = player
             Log.d(
-                "SwiftRadio",
+                TAG,
                 "Svc playback state=$stateName playWhenReady=${exoPlayer?.playWhenReady} isPlaying=${exoPlayer?.isPlaying}"
             )
             logAudioOutputState("state=$stateName")
@@ -116,14 +124,14 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_BUFFERING -> scheduleBufferingRecovery()
                 Player.STATE_ENDED -> {
                     cancelStallRecovery()
-                    Log.w("SwiftRadio", "Svc playback ended; retrying current stream")
+                    Log.w(TAG, "Svc playback ended; retrying current stream")
                     retryCurrentItem("state_ended")
                 }
                 Player.STATE_IDLE -> {
                     cancelBufferingRecovery()
                     cancelStallRecovery()
                     if (exoPlayer?.playWhenReady == true) {
-                        Log.w("SwiftRadio", "Svc entered IDLE while playWhenReady=true; retrying")
+                        Log.w(TAG, "Svc entered IDLE while playWhenReady=true; retrying")
                         retryCurrentItem("state_idle")
                     }
                 }
@@ -133,7 +141,7 @@ class AudioService : MediaLibraryService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val exoPlayer = player
             Log.d(
-                "SwiftRadio",
+                TAG,
                 "Svc isPlaying=$isPlaying playWhenReady=${exoPlayer?.playWhenReady} " +
                     "suppression=${exoPlayer?.playbackSuppressionReason}"
             )
@@ -143,7 +151,7 @@ class AudioService : MediaLibraryService() {
                 exoPlayer.playbackState == Player.STATE_READY &&
                 exoPlayer.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
             ) {
-                Log.w("SwiftRadio", "Svc ready but not playing (no suppression); retrying stream")
+                Log.w(TAG, "Svc ready but not playing (no suppression); retrying stream")
                 retryCurrentItem("ready_not_playing")
                 return
             }
@@ -153,7 +161,7 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            Log.d("SwiftRadio", "Svc playWhenReady=$playWhenReady reason=$reason")
+            Log.d(TAG, "Svc playWhenReady=$playWhenReady reason=$reason")
             if (playWhenReady) {
                 startStallRecovery()
             } else {
@@ -218,13 +226,11 @@ class AudioService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-            // Items from the phone app controller already have URIs — pass them through
             val allHaveUri = mediaItems.all { it.localConfiguration?.uri != null }
             if (allHaveUri) {
                 return Futures.immediateFuture(mediaItems)
             }
 
-            // Android Auto sends items by mediaId only — wait for stations to load, then resolve
             val future = SettableFuture.create<List<MediaItem>>()
             serviceScope.launch {
                 try {
@@ -277,7 +283,6 @@ class AudioService : MediaLibraryService() {
         cancelRetry()
         cancelBufferingRecovery()
         cancelStallRecovery()
-        mainHandler.removeCallbacksAndMessages(null)
         player = null
         mediaSession = null
         super.onDestroy()
@@ -288,16 +293,16 @@ class AudioService : MediaLibraryService() {
         serviceScope.launch {
             try {
                 val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
-                stations = withContext(Dispatchers.IO) { repository.loadStations(remoteUrl) }
+                stations = repository.loadStations(remoteUrl)
                 browseMediaItems = stations.mapIndexed { index, station ->
-                    val imageUrl = resolveStationImageUrl(station)
+                    val imageUrl = station.resolvedImageUrl
                     MediaItem.Builder()
                         .setMediaId("station_$index")
                         .setMediaMetadata(
                             MediaMetadata.Builder()
                                 .setTitle(station.name)
                                 .setArtist(station.desc)
-                                .setArtworkUri(imageUrl?.let { Uri.parse(it) })
+                                .setArtworkUri(if (imageUrl.isNotBlank()) Uri.parse(imageUrl) else null)
                                 .setIsBrowsable(false)
                                 .setIsPlayable(true)
                                 .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
@@ -306,7 +311,7 @@ class AudioService : MediaLibraryService() {
                         .build()
                 }
             } catch (e: Exception) {
-                Log.e("SwiftRadio", "Failed to load stations for browse", e)
+                Log.e(TAG, "Failed to load stations for browse", e)
             }
             stationsLoaded.complete(Unit)
             mediaSession?.let { session ->
@@ -323,7 +328,7 @@ class AudioService : MediaLibraryService() {
             .takeIf { it >= 0 } ?: 0
 
         val playableItems = stations.mapIndexed { index, station ->
-            val imageUrl = resolveStationImageUrl(station)
+            val imageUrl = station.resolvedImageUrl
             MediaItem.Builder()
                 .setMediaId("station_$index")
                 .setUri(station.streamURL)
@@ -331,7 +336,7 @@ class AudioService : MediaLibraryService() {
                     MediaMetadata.Builder()
                         .setTitle(station.name)
                         .setArtist(station.desc)
-                        .setArtworkUri(imageUrl?.let { Uri.parse(it) })
+                        .setArtworkUri(if (imageUrl.isNotBlank()) Uri.parse(imageUrl) else null)
                         .setIsPlayable(true)
                         .build()
                 )
@@ -341,17 +346,6 @@ class AudioService : MediaLibraryService() {
         val reordered = playableItems.subList(selectedIndex, playableItems.size) +
             playableItems.subList(0, selectedIndex)
         return reordered
-    }
-
-    private fun resolveStationImageUrl(station: RadioStation): String? {
-        if (station.imageURL.startsWith("http")) return station.imageURL
-        if (station.imageURL.isNotBlank()) {
-            val extensions = listOf("png", "jpg", "jpeg")
-            val assetFiles = assets.list("")?.toSet() ?: emptySet()
-            val match = extensions.firstOrNull { "${station.imageURL}.$it" in assetFiles }
-            if (match != null) return "file:///android_asset/${station.imageURL}.$match"
-        }
-        return "file:///android_asset/stationImage.png"
     }
 
     private fun extractIcyTitle(metadata: Metadata): String? {
@@ -412,41 +406,37 @@ class AudioService : MediaLibraryService() {
         val currentIndex = exoPlayer.currentMediaItemIndex.coerceAtLeast(0)
         val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri
         Log.w(
-            "SwiftRadio",
+            TAG,
             "Svc retry stream reason=$reason attempt=$retryCount delayMs=$delayMs index=$currentIndex uri='$currentUri'"
         )
 
         cancelRetry()
-        retryRunnable = Runnable {
-            val activePlayer = player ?: return@Runnable
-            if (activePlayer.mediaItemCount <= 0) return@Runnable
+        retryJob = serviceScope.launch {
+            delay(delayMs)
+            val activePlayer = player ?: return@launch
+            if (activePlayer.mediaItemCount <= 0) return@launch
             val index = activePlayer.currentMediaItemIndex.coerceIn(0, activePlayer.mediaItemCount - 1)
-            // Re-prepare current item without replacing the playlist.
             activePlayer.stop()
             activePlayer.seekTo(index, 0)
             activePlayer.prepare()
             activePlayer.play()
-        }.also {
-            mainHandler.postDelayed(it, delayMs)
         }
     }
 
     private fun cancelRetry() {
-        val runnable = retryRunnable ?: return
-        mainHandler.removeCallbacks(runnable)
-        retryRunnable = null
+        retryJob?.cancel()
+        retryJob = null
     }
 
     private fun scheduleBufferingRecovery() {
         cancelBufferingRecovery()
-        bufferingRecoveryRunnable = Runnable {
-            val exoPlayer = player ?: return@Runnable
+        bufferingRecoveryJob = serviceScope.launch {
+            delay(15_000L)
+            val exoPlayer = player ?: return@launch
             if (exoPlayer.playbackState == Player.STATE_BUFFERING && exoPlayer.playWhenReady) {
-                Log.w("SwiftRadio", "Svc buffering timeout; retrying current stream")
+                Log.w(TAG, "Svc buffering timeout; retrying current stream")
                 retryCurrentItem("buffer_timeout")
             }
-        }.also {
-            mainHandler.postDelayed(it, 15_000L)
         }
     }
 
@@ -459,9 +449,10 @@ class AudioService : MediaLibraryService() {
 
     private fun scheduleStallCheck() {
         cancelStallRecovery()
-        stallRecoveryRunnable = Runnable {
-            val exoPlayer = player ?: return@Runnable
-            if (!exoPlayer.playWhenReady || exoPlayer.playbackState != Player.STATE_READY) return@Runnable
+        stallRecoveryJob = serviceScope.launch {
+            delay(5_000L)
+            val exoPlayer = player ?: return@launch
+            if (!exoPlayer.playWhenReady || exoPlayer.playbackState != Player.STATE_READY) return@launch
 
             val nowRealtime = SystemClock.elapsedRealtime()
             val currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
@@ -470,44 +461,34 @@ class AudioService : MediaLibraryService() {
                 lastObservedPositionMs = currentPosition
                 lastPositionRealtimeMs = nowRealtime
                 scheduleStallCheck()
-                return@Runnable
+                return@launch
             }
 
             val stagnantForMs = nowRealtime - lastPositionRealtimeMs
             if (stagnantForMs >= 15_000L) {
-                Log.w(
-                    "SwiftRadio",
-                    "Svc playback stall detected at position=$currentPosition; retrying stream"
-                )
+                Log.w(TAG, "Svc playback stall detected at position=$currentPosition; retrying stream")
                 retryCurrentItem("stall_ready")
-                return@Runnable
+                return@launch
             }
 
             scheduleStallCheck()
-        }.also {
-            mainHandler.postDelayed(it, 5_000L)
         }
     }
 
     private fun cancelBufferingRecovery() {
-        val runnable = bufferingRecoveryRunnable ?: return
-        mainHandler.removeCallbacks(runnable)
-        bufferingRecoveryRunnable = null
+        bufferingRecoveryJob?.cancel()
+        bufferingRecoveryJob = null
     }
 
     private fun cancelStallRecovery() {
-        val runnable = stallRecoveryRunnable ?: return
-        mainHandler.removeCallbacks(runnable)
-        stallRecoveryRunnable = null
+        stallRecoveryJob?.cancel()
+        stallRecoveryJob = null
     }
 
     private fun logAudioOutputState(tag: String) {
         val exoPlayer = player ?: return
         val musicVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val musicMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        Log.d(
-            "SwiftRadio",
-            "Svc audio $tag playerVolume=${exoPlayer.volume} deviceMusicVolume=$musicVolume/$musicMax"
-        )
+        Log.d(TAG, "Svc audio $tag playerVolume=${exoPlayer.volume} deviceMusicVolume=$musicVolume/$musicMax")
     }
 }

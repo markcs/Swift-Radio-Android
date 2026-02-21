@@ -55,7 +55,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     val resolvedArtwork: String?
-        get() = uiState.artworkUrl ?: resolveStationImageUrl(uiState.currentStation)
+        get() = uiState.artworkUrl ?: uiState.currentStation?.resolvedImageUrl
 
     // Controller
     private val mainExecutor = ContextCompat.getMainExecutor(application)
@@ -390,7 +390,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         val streamArtwork = metadata.artworkUri?.toString()?.takeIf { it.isNotBlank() }
         val previousArtwork = uiState.artworkUrl
-        val stationArtwork = resolveStationImageUrl(station)
+        val stationArtwork = station?.resolvedImageUrl
         val streamArtworkIsStationArtwork =
             streamArtwork != null && stationArtwork != null && streamArtwork == stationArtwork
 
@@ -460,30 +460,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun buildMediaItems(stations: List<RadioStation>): List<MediaItem> {
         return stations.map { station ->
-            val imageUri = resolveStationImageUrl(station)
+            val imageUri = station.resolvedImageUrl
             MediaItem.Builder()
                 .setUri(station.streamURL)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(station.name)
                         .setArtist(station.desc)
-                        .setArtworkUri(imageUri?.let { Uri.parse(it) })
+                        .setArtworkUri(if (imageUri.isNotBlank()) Uri.parse(imageUri) else null)
                         .build()
                 )
                 .build()
         }
-    }
-
-    private fun resolveStationImageUrl(station: RadioStation?): String? {
-        station ?: return null
-        if (station.imageURL.startsWith("http")) return station.imageURL
-        if (station.imageURL.isNotBlank()) {
-            val extensions = listOf("png", "jpg", "jpeg")
-            val assetFiles = getApplication<Application>().assets.list("")?.toSet() ?: emptySet()
-            val match = extensions.firstOrNull { "${station.imageURL}.$it" in assetFiles }
-            if (match != null) return "file:///android_asset/${station.imageURL}.$match"
-        }
-        return "file:///android_asset/stationImage.png"
     }
 
     private fun metadataFingerprint(metadata: MediaMetadata): String {

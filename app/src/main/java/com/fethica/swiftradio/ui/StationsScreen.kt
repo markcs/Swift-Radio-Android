@@ -163,19 +163,7 @@ private fun StationRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val context = LocalContext.current
-            val imageModel = if (station.imageURL.startsWith("http")) {
-                station.imageURL
-            } else {
-                // Try common extensions for local assets
-                val extensions = listOf("png", "jpg", "jpeg")
-                val assetFiles = context.assets.list("")?.toSet() ?: emptySet()
-                val match = extensions.firstOrNull { "${station.imageURL}.$it" in assetFiles }
-                if (match != null) {
-                    "file:///android_asset/${station.imageURL}.$match"
-                } else {
-                    "file:///android_asset/stationImage.png"
-                }
-            }
+            val imageModel = station.resolvedImageUrl
 
             Box(
                 modifier = Modifier

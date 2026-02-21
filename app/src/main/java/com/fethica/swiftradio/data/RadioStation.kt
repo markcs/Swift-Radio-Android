@@ -1,6 +1,7 @@
 package com.fethica.swiftradio.data
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class RadioStation(
@@ -10,7 +11,10 @@ data class RadioStation(
     val desc: String,
     val longDesc: String = "",
     val website: String = ""
-)
+) {
+    @Transient
+    var resolvedImageUrl: String = ""
+}
 
 @Serializable
 data class StationsResponse(
