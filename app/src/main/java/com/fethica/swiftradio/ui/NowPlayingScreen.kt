@@ -34,8 +34,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Speaker
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,7 +55,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -381,7 +380,7 @@ fun NowPlayingScreen(
                 IconButton(onClick = {
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val intent = Intent("android.settings.panel.action.MEDIA_OUTPUT").apply {
+                            val intent = Intent("com.android.settings.panel.action.MEDIA_OUTPUT").apply {
                                 putExtra("com.android.settings.panel.extra.PACKAGE_NAME", context.packageName)
                             }
                             context.startActivity(intent)
@@ -393,7 +392,7 @@ fun NowPlayingScreen(
                     }
                 }) {
                     Icon(
-                        imageVector = Icons.Filled.Cast,
+                        imageVector = Icons.Outlined.Speaker,
                         contentDescription = stringResource(R.string.cd_audio_output),
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(24.dp)
