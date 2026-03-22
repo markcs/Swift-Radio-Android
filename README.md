@@ -1,34 +1,38 @@
 # Swift Radio Android
 
-A fully featured, open-source radio station app for Android built with Kotlin, Jetpack Compose, and Media3.
+Open-source radio station app for Android built with Kotlin, Jetpack Compose, and Media3. Yes, it's called Swift Radio and it's written in Kotlin. The name comes from the [iOS original](https://github.com/analogcode/Swift-Radio-Pro). Same station JSON format, matching design and behavior.
+
+<p align="center">
+    <img alt="Station list" src="screenshots/stations.png" width="300">
+    <img alt="Now playing" src="screenshots/player.png" width="300">
+</p>
 
 ## Features
 
-- streaming support for live and on-demand audio
-- Android Auto integration with full browse tree and playback controls
-- album art and track metadata from streams and the iTunes API
-- lock screen and notification controls with artwork
-- multiple station support from local or remote JSON
-- background playback with proper audio focus handling
-- localization-ready with all strings extracted to resources
+- Stream live and on-demand radio with background playback
+- Android Auto integration with browse tree, playback controls, and artwork
+- Album art and track metadata from streams and the iTunes API
+- Lock screen and notification controls with artwork
+- Multiple stations from a local or remote JSON file
+- Search and filter stations by name or description
+- Material You dynamic color support on Android 12+
+- Localization-ready with all strings extracted to resources
 
-## Built With
+## Requirements
 
-- [Media3](https://developer.android.com/media/media3) (ExoPlayer, MediaSession, MediaLibraryService)
-- [Jetpack Compose](https://developer.android.com/compose) with Material 3
-- [Coil](https://coil-kt.github.io/coil/) for image loading
-- [Ktor](https://ktor.io/) for networking
+- Android 7.0+ (API 24)
+- Android Studio
 
 ## Getting Started
 
 1. Open the project in [Android Studio](https://developer.android.com/studio)
-2. Edit `Config.kt` to set your app name, URLs, and contact info
+2. Edit `Config.kt` to set your stations URL, contact info, and feature flags
 3. Replace the stations in `app/src/main/assets/stations.json` with your own
-4. Run the app
+4. Build and run
 
-## Station Format
+### Station Format
 
-Stations are defined in `stations.json`. Each station has the following fields:
+Each station in `stations.json` supports the following fields:
 
 ```json
 {
@@ -54,9 +58,26 @@ Stations are defined in `stations.json`. Each station has the following fields:
 | `longDesc` | No | Longer description shown in the station info sheet |
 | `website` | No | Station website URL shown in the info sheet |
 
-To load stations from a remote URL instead of the local file, set `useLocalStations = false` in `Config.kt` and update `stationsURL`.
+Images can be local (asset name without `http`) or remote (full URL).
 
-## Customizing Text and Translation
+### Configuration
+
+All app-wide settings live in `Config.kt`:
+
+```kotlin
+object Config {
+    val gradientColor: Color = Color.White       // diagonal gradient overlay color
+    const val useLocalStations = true             // false = fetch from stationsURL
+    const val stationsURL = "https://..."         // remote stations JSON URL
+    const val hideNextPreviousButtons = false      // hide skip controls on the player
+    const val enableSearch = true                  // show/hide search bar on station list
+    const val email = "contact@example.com"
+    const val feedbackURL = "https://..."
+    const val shareText = "Check out Swift Radio!"
+}
+```
+
+### Customizing Text and Translation
 
 All user-facing strings are in `app/src/main/res/values/strings.xml`. To add a new language:
 
@@ -71,20 +92,24 @@ Android will automatically use the correct language based on the user's device s
 | Library | Purpose |
 |---------|---------|
 | [AndroidX Media3](https://developer.android.com/media/media3) | Audio playback, media session, Android Auto |
-| [Jetpack Compose](https://developer.android.com/compose) | UI framework |
+| [Jetpack Compose](https://developer.android.com/compose) | UI framework with Material 3 |
 | [Coil](https://github.com/coil-kt/coil) | Image loading and caching |
 | [Ktor](https://github.com/ktorio/ktor) | HTTP client for remote station loading |
 | [Kotlinx Serialization](https://github.com/Kotlin/kotlinx.serialization) | JSON parsing |
 
 ## Single Station Version
 
-A single-station version is available on [Payhip](https://payhip.com/nicefiction).
+A single-station version is coming soon. It will be bundled with the [iOS single-station version](https://payhip.com/b/x15QB) for the same price. Updates will be posted here when it's ready.
+
+For custom work or more advanced needs, reach out to [Fethi](mailto:contact@fethica.com).
+
+**Built something with Swift Radio?** Drop us a line at [contact@fethica.com](mailto:contact@fethica.com).
 
 ## Credits
 
-- Created by [Fethi El Hassasna](https://github.com/fethica) and [Matt Fecher](https://github.com/swiftcodex)
+- [Fethi](https://fethica.com)
 - Based on [Swift Radio Pro](https://github.com/analogcode/Swift-Radio-Pro) for iOS
 
 ## License
 
-[MIT License](LICENSE)
+Swift Radio is open source and available under the [MIT License](LICENSE).
