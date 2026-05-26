@@ -38,22 +38,32 @@ class StationsRepository(
                 fetched
             } catch (e: Exception) {
                 val cached = loadFromCache()
-                if (cached.isNotEmpty()) cached else throw e
+                if (cached.isNotEmpty()) {
+                    cached
+                } else {
+                    // Fallback to assets if remote and cache both fail
+                    try {
+                        loadFromAssets()
+                    } catch (assetEx: Exception) {
+                        throw e // rethrow the original network error if assets also fail
+                    }
+                }
             }
         } else {
             loadFromAssets()
         }
         
-        val assetFiles = context.assets.list("")?.toSet() ?: emptySet()
         val extensions = listOf("png", "jpg", "jpeg")
         
         stations.forEach { station ->
             station.resolvedImageUrl = if (station.imageURL.startsWith("http")) {
                 station.imageURL
             } else if (station.imageURL.isNotBlank()) {
-                val match = extensions.firstOrNull { "${station.imageURL}.$it" in assetFiles }
-                if (match != null) "file:///android_asset/${station.imageURL}.$match"
-                else "file:///android_asset/stationImage.png"
+                // We'll trust the extensions and let Coil handle the fallback or use a default
+                val ext = if (station.imageURL == "station-absolutecountry" || 
+                    station.imageURL == "station-classicrock" || 
+                    station.imageURL == "station-therockfm") "jpg" else "png"
+                "file:///android_asset/${station.imageURL}.$ext"
             } else {
                 "file:///android_asset/stationImage.png"
             }

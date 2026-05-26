@@ -81,6 +81,7 @@ fun NowPlayingScreen(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    liveScore: String? = null,
     isPlaying: Boolean,
     isBuffering: Boolean = false,
     isLive: Boolean,
@@ -97,7 +98,10 @@ fun NowPlayingScreen(
     val normalizedTitle = trackTitle.trim()
     val normalizedArtist = artistName.trim()
     val hasTrackMetadata = normalizedTitle.isNotBlank() && !normalizedTitle.equals(stationName, ignoreCase = true)
-    val displayTitle = if (hasTrackMetadata) {
+    
+    val displayTitle = if (liveScore != null) {
+        liveScore
+    } else if (hasTrackMetadata) {
         if (normalizedArtist.isNotBlank()) {
             "$normalizedTitle — $normalizedArtist"
         } else {
@@ -229,7 +233,11 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 32.dp)
-                    .basicMarquee()
+                    .basicMarquee
+                    (
+                       iterations = Int.MAX_VALUE,
+                       velocity = 45.dp // Moved velocity inside the basicMarquee parameters
+                    )
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -243,7 +251,11 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 24.dp)
-                    .basicMarquee()
+                    .basicMarquee
+                    (
+                       iterations = Int.MAX_VALUE,
+                       velocity = 45.dp // Moved velocity inside the basicMarquee parameters
+                    )
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -420,6 +432,7 @@ fun NowPlayingScreen(
                 website = stationWebsite,
                 trackTitle = trackTitle,
                 artistName = artistName,
+                liveScore = liveScore,
                 onDismiss = { showInfoSheet = false }
             )
         }

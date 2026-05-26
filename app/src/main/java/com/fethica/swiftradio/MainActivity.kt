@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
                                     trackTitle = state.trackTitle,
                                     artistName = state.artistName,
                                     artworkUrl = vm.resolvedArtwork,
+                                    liveScore = state.liveScore,
                                     isPlaying = state.isPlaying,
                                     isBuffering = state.isBuffering,
                                     isLive = state.isLive,

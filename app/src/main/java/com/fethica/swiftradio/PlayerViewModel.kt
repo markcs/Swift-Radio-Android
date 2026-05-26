@@ -28,6 +28,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 data class PlayerUiState(
     val stations: List<RadioStation> = emptyList(),
@@ -37,6 +41,7 @@ data class PlayerUiState(
     val trackTitle: String = "",
     val artistName: String = "",
     val artworkUrl: String? = null,
+    val liveScore: String? = null,
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
     val isError: Boolean = false,
@@ -55,7 +60,8 @@ private data class RawPlaybackState(
 class PlayerViewModel(
     application: Application,
     private val stationsRepository: StationsRepository,
-    private val artworkService: ArtworkService
+    private val artworkService: ArtworkService,
+    private val squiggleService: com.fethica.swiftradio.data.SquiggleService
 ) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf(PlayerUiState())
@@ -138,6 +144,14 @@ class PlayerViewModel(
     init {
         observeRawState()
         loadStations()
+
+        viewModelScope.launch {
+            squiggleService.liveScore.collect { score ->
+                if (uiState.liveScore != score) {
+                    uiState = uiState.copy(liveScore = score)
+                }
+            }
+        }
     }
 
     // --- Public API ---
@@ -588,7 +602,8 @@ class PlayerViewModel(
                 return PlayerViewModel(
                     application,
                     application.stationsRepository,
-                    application.artworkService
+                    application.artworkService,
+                    application.squiggleService
                 ) as T
             }
         }

@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Swift Radio</string>
-    <string name="app_title">Swift Radio</string>
+    <string name="app_name">Footy Radio</string>
+    <string name="app_title">Footy Radio</string>
     <string name="error_loading_stations">Failed to load stations.\nPlease check your connection.</string>
 
     <!-- Stations Screen -->
@@ -27,7 +27,7 @@
     <string name="share_listening_station">Listening to %1$s</string>
 
     <!-- About Screen -->
-    <string name="about_title">About Swift Radio</string>
+    <string name="about_title">About Footy Radio</string>
     <string name="cd_back">Back</string>
     <string name="about_header_part1">" is a fully featured, open-source radio station app for Android, written entirely in "</string>
     <string name="about_header_kotlin">Kotlin</string>
@@ -56,12 +56,12 @@
     <string name="about_license">License</string>
     <string name="about_license_subtitle">MIT License</string>
     <string name="about_app_version">App Version</string>
-    <string name="about_email_subject">From Swift Radio App</string>
+    <string name="about_email_subject">From Footy Radio App</string>
     <string name="about_share_chooser">Share</string>
 
     <!-- About Screen - Footer -->
     <string name="about_authors">Fethi - @fethica</string>
-    <string name="about_copyright">Copyright \u00A9 %1$d Swift Radio</string>
+    <string name="about_copyright">Copyright \u00A9 %1$d Footy Radio</string>
 
     <!-- Features -->
     <string name="feature_kotlin_title">Kotlin Codebase</string>

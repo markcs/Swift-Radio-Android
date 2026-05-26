@@ -7,9 +7,15 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.fethica.swiftradio.data.ArtworkService
 import com.fethica.swiftradio.data.StationsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 
 class SwiftRadioApplication : Application(), SingletonImageLoader.Factory {
+
+    private val applicationJob = SupervisorJob()
+    val applicationScope = CoroutineScope(applicationJob + Dispatchers.Main)
 
     val sharedOkHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder().build()
@@ -23,6 +29,10 @@ class SwiftRadioApplication : Application(), SingletonImageLoader.Factory {
         ArtworkService(sharedOkHttpClient)
     }
 
+    val squiggleService: com.fethica.swiftradio.data.SquiggleService by lazy {
+        com.fethica.swiftradio.data.SquiggleService(sharedOkHttpClient, applicationScope)
+    }
+
     override fun onCreate() {
         super.onCreate()
     }
@@ -30,6 +40,8 @@ class SwiftRadioApplication : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
+                // AssetManagerFetcher is usually added automatically on Android, 
+                // but we'll ensure it's there alongside our custom OkHttp fetcher.
                 add(OkHttpNetworkFetcherFactory(callFactory = { sharedOkHttpClient }))
             }
             .build()

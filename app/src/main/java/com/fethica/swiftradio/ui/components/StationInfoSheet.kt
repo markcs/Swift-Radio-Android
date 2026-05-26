@@ -48,6 +48,7 @@ fun StationInfoSheet(
     website: String,
     trackTitle: String,
     artistName: String,
+    liveScore: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -58,7 +59,7 @@ fun StationInfoSheet(
     val displayDesc = longDesc.ifBlank { stationDesc }
     val hasDesc = displayDesc.isNotBlank()
     
-    val hasTrackInfo = trackTitle.isNotBlank() &&
+    val hasTrackInfo = liveScore == null && trackTitle.isNotBlank() &&
         !trackTitle.equals(stationName, ignoreCase = true)
 
     ModalBottomSheet(
@@ -114,7 +115,7 @@ fun StationInfoSheet(
                 icon = Icons.Outlined.Share,
                 label = stringResource(R.string.info_share_now_playing),
                 onClick = {
-                    shareNowPlaying(context, stationName, trackTitle, artistName)
+                    shareNowPlaying(context, stationName, trackTitle, artistName, liveScore)
                 }
             )
         }
@@ -172,11 +173,15 @@ private fun shareNowPlaying(
     context: Context,
     stationName: String,
     trackTitle: String,
-    artistName: String
+    artistName: String,
+    liveScore: String? = null
 ) {
     val hasTrack = trackTitle.isNotBlank() &&
         !trackTitle.equals(stationName, ignoreCase = true)
-    val text = if (hasTrack) {
+    
+    val text = if (liveScore != null) {
+        "I'm listening to $stationName: $liveScore"
+    } else if (hasTrack) {
         val parts = mutableListOf<String>()
         if (artistName.isNotBlank()) parts.add(artistName)
         parts.add(trackTitle)

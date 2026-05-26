@@ -15,6 +15,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
@@ -23,10 +24,13 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import com.fethica.swiftradio.data.RadioStation
 import com.fethica.swiftradio.data.StationsRepository
+import com.fethica.swiftradio.data.SquiggleService
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import okhttp3.Request
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +42,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class AudioService : MediaLibraryService() {
 
@@ -47,6 +55,9 @@ class AudioService : MediaLibraryService() {
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
     private var stallRecoveryJob: Job? = null
+    
+    private var currentLiveScore: String? = null
+    private var currentIcyTitle: String? = null
     
     private var retryCount = 0
     private var lastObservedPositionMs: Long = 0L
@@ -65,8 +76,7 @@ class AudioService : MediaLibraryService() {
     private val artworkCache = mutableMapOf<String, ByteArray?>()
 
     companion object {
-        private const val ROOT_ID = "root"
-        private const val STATIONS_ID = "stations"
+        private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
     }
 
@@ -75,41 +85,8 @@ class AudioService : MediaLibraryService() {
             val exoPlayer = player ?: return
             serviceScope.launch(Dispatchers.Default) {
                 val icyTitle = extractIcyTitle(metadata) ?: return@launch
-                val parsedMetadata = buildTrackMetadataFromIcy(icyTitle)
-                
-                withContext(Dispatchers.Main) {
-                    if (trackMetadataEquivalent(exoPlayer.playlistMetadata, parsedMetadata)) return@withContext
-                    Log.d(TAG, "Svc ICY metadata raw='$icyTitle' title='${parsedMetadata.title}' artist='${parsedMetadata.artist}'")
-                    
-                    // Update global playlist metadata for the phone UI
-                    exoPlayer.setPlaylistMetadata(parsedMetadata)
-                    
-                    // Update the currently playing MediaItem to force a UI refresh on Android Auto
-                    val currentItem = exoPlayer.currentMediaItem
-                    if (currentItem != null) {
-                        val baseStationMeta = currentItem.mediaMetadata
-                        val newMetadataBuilder = baseStationMeta.buildUpon()
-                            .setTitle(parsedMetadata.title ?: baseStationMeta.title)
-                        
-                        if (parsedMetadata.artist != null) {
-                            newMetadataBuilder.setArtist(parsedMetadata.artist)
-                        }
-
-                        // IMPORTANT: We must retain the original artwork URI and Data so Android Auto doesn't blank out
-                        if (baseStationMeta.artworkUri != null) {
-                            newMetadataBuilder.setArtworkUri(baseStationMeta.artworkUri)
-                        }
-                        if (baseStationMeta.artworkData != null) {
-                            newMetadataBuilder.setArtworkData(baseStationMeta.artworkData, baseStationMeta.artworkDataType)
-                        }
-                        
-                        val newItem = currentItem.buildUpon()
-                            .setMediaMetadata(newMetadataBuilder.build())
-                            .build()
-                            
-                        exoPlayer.replaceMediaItem(exoPlayer.currentMediaItemIndex, newItem)
-                    }
-                }
+                currentIcyTitle = icyTitle
+                updateDisplayMetadata()
             }
         }
 
@@ -121,6 +98,7 @@ class AudioService : MediaLibraryService() {
             Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
+            currentIcyTitle = null
             if (!isEmptyTrackMetadata(exoPlayer.playlistMetadata)) {
                 exoPlayer.setPlaylistMetadata(MediaMetadata.Builder().build())
             }
@@ -156,23 +134,15 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_IDLE -> {
                     cancelBufferingRecovery()
                     cancelStallRecovery()
-                    if (exoPlayer?.playWhenReady == true) {
-                        retryCurrentItem("state_idle")
-                    }
+                    // Remove aggressive retry on IDLE to prevent loops
                 }
             }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val exoPlayer = player
-            if (!isPlaying &&
-                exoPlayer?.playWhenReady == true &&
-                exoPlayer.playbackState == Player.STATE_READY &&
-                exoPlayer.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
-            ) {
-                retryCurrentItem("ready_not_playing")
-                return
-            }
+            // Relaxed check: Only retry if it's been stalled in READY for a long time (handled by stall recovery)
+            // or if it's a clear error state.
             if (!isPlaying) {
                 startStallRecovery()
             }
@@ -184,6 +154,26 @@ class AudioService : MediaLibraryService() {
     }
 
     private val libraryCallback = object : MediaLibrarySession.Callback {
+
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            // Allow all controllers and include library commands
+            val connectionResult = super.onConnect(session, controller)
+            val availableSessionCommands = connectionResult.availableSessionCommands.buildUpon()
+            // Add library commands explicitly
+            availableSessionCommands.add(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_GET_CHILDREN)
+            availableSessionCommands.add(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_GET_ITEM)
+            availableSessionCommands.add(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_GET_LIBRARY_ROOT)
+            availableSessionCommands.add(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_SUBSCRIBE)
+            availableSessionCommands.add(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_UNSUBSCRIBE)
+            
+            return MediaSession.ConnectionResult.accept(
+                availableSessionCommands.build(),
+                connectionResult.availablePlayerCommands
+            )
+        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
@@ -212,10 +202,20 @@ class AudioService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            if (parentId != ROOT_ID && parentId != STATIONS_ID) {
+            if (parentId != ROOT_ID) {
                 return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
             }
-            return Futures.immediateFuture(LibraryResult.ofItemList(browseMediaItems, params))
+
+            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            serviceScope.launch {
+                try {
+                    stationsLoaded.await()
+                    future.set(LibraryResult.ofItemList(ImmutableList.copyOf(browseMediaItems), params))
+                } catch (e: Exception) {
+                    future.setException(e)
+                }
+            }
+            return future
         }
 
         override fun onGetItem(
@@ -223,9 +223,21 @@ class AudioService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val item = browseMediaItems.firstOrNull { it.mediaId == mediaId }
-                ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
-            return Futures.immediateFuture(LibraryResult.ofItem(item, null))
+            val future = SettableFuture.create<LibraryResult<MediaItem>>()
+            serviceScope.launch {
+                try {
+                    stationsLoaded.await()
+                    val item = browseMediaItems.firstOrNull { it.mediaId == mediaId }
+                    if (item != null) {
+                        future.set(LibraryResult.ofItem(item, null))
+                    } else {
+                        future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
+                    }
+                } catch (e: Exception) {
+                    future.setException(e)
+                }
+            }
+            return future
         }
 
         override fun onAddMediaItems(
@@ -255,8 +267,27 @@ class AudioService : MediaLibraryService() {
         super.onCreate()
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("Icy-MetaData" to "1"))
+            .setAllowCrossProtocolRedirects(true)
+
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        
+        // Increase buffering for smoother HLS playback
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                20_000, // minBufferMs
+                50_000, // maxBufferMs
+                2_500,  // bufferForPlaybackMs
+                5_000   // bufferForPlaybackAfterRebufferMs
+            )
+            .setBackBuffer(10_000, true)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            .setLiveTargetOffsetMs(10_000L) // Stay behind live edge for better stability
+            .setLiveMaxOffsetMs(20_000L)
+            .setLiveMinOffsetMs(2_000L)
+
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -264,6 +295,8 @@ class AudioService : MediaLibraryService() {
 
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         exoPlayer.setAudioAttributes(audioAttributes, true)
         exoPlayer.volume = 1f
@@ -271,9 +304,76 @@ class AudioService : MediaLibraryService() {
         exoPlayer.addListener(playerListener)
         player = exoPlayer
         
-        mediaSession = MediaLibrarySession.Builder(this, exoPlayer, libraryCallback).build()
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        val pendingIntent = intent?.let {
+            android.app.PendingIntent.getActivity(
+                this, 0, it, android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        mediaSession = MediaLibrarySession.Builder(this, exoPlayer, libraryCallback).apply {
+            pendingIntent?.let { setSessionActivity(it) }
+        }.build()
 
         loadStationsForBrowse()
+        
+        serviceScope.launch {
+            val app = application as SwiftRadioApplication
+            app.squiggleService.liveScore.collect { score ->
+                if (currentLiveScore != score) {
+                    currentLiveScore = score
+                    updateDisplayMetadata()
+                }
+            }
+        }
+    }
+
+    private fun updateDisplayMetadata() {
+        val exoPlayer = player ?: return
+        serviceScope.launch(Dispatchers.Main) {
+            val icyTitle = currentIcyTitle
+            val liveScore = currentLiveScore
+            
+            val parsedMetadata = if (!icyTitle.isNullOrBlank()) {
+                buildTrackMetadataFromIcy(icyTitle)
+            } else {
+                MediaMetadata.Builder().build()
+            }
+            
+            // Update global playlist metadata for the phone UI
+            exoPlayer.setPlaylistMetadata(parsedMetadata)
+            
+            // Update the currently playing MediaItem to force a UI refresh on Android Auto
+            val currentItem = exoPlayer.currentMediaItem ?: return@launch
+            val baseStationMeta = currentItem.mediaMetadata
+            val newMetadataBuilder = baseStationMeta.buildUpon()
+            
+            val displayTitle = liveScore 
+                ?: parsedMetadata.title?.toString() 
+                ?: baseStationMeta.title
+                
+            newMetadataBuilder.setTitle(displayTitle)
+            
+            if (liveScore == null && parsedMetadata.artist != null) {
+                newMetadataBuilder.setArtist(parsedMetadata.artist)
+            } else if (liveScore != null) {
+                newMetadataBuilder.setArtist(null) // Hide artist when showing scores
+            }
+
+            // IMPORTANT: We must retain the original artwork URI and Data
+            if (baseStationMeta.artworkUri != null) {
+                newMetadataBuilder.setArtworkUri(baseStationMeta.artworkUri)
+            }
+            if (baseStationMeta.artworkData != null) {
+                newMetadataBuilder.setArtworkData(baseStationMeta.artworkData, baseStationMeta.artworkDataType)
+            }
+            
+            val newItem = currentItem.buildUpon()
+                .setMediaMetadata(newMetadataBuilder.build())
+                .build()
+                
+            exoPlayer.replaceMediaItem(exoPlayer.currentMediaItemIndex, newItem)
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -303,7 +403,9 @@ class AudioService : MediaLibraryService() {
             try {
                 val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
                 stations = repository.loadStations(remoteUrl)
-                browseMediaItems = stations.mapIndexed { index, station ->
+                
+                val items = mutableListOf<MediaItem>()
+                for ((index, station) in stations.withIndex()) {
                     val metadataBuilder = MediaMetadata.Builder()
                         .setTitle(station.name)
                         .setArtist(station.desc)
@@ -313,11 +415,12 @@ class AudioService : MediaLibraryService() {
                         
                     applyArtworkToMetadata(station.resolvedImageUrl, metadataBuilder)
                         
-                    MediaItem.Builder()
+                    items.add(MediaItem.Builder()
                         .setMediaId("station_$index")
                         .setMediaMetadata(metadataBuilder.build())
-                        .build()
+                        .build())
                 }
+                browseMediaItems = items
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load stations for browse", e)
             }
@@ -330,12 +433,13 @@ class AudioService : MediaLibraryService() {
         }
     }
 
-    private fun resolveAutoMediaItems(mediaItems: List<MediaItem>): List<MediaItem> {
+    private suspend fun resolveAutoMediaItems(mediaItems: List<MediaItem>): List<MediaItem> {
         val requestedId = mediaItems.firstOrNull()?.mediaId
         val selectedIndex = browseMediaItems.indexOfFirst { it.mediaId == requestedId }
             .takeIf { it >= 0 } ?: 0
 
-        val playableItems = stations.mapIndexed { index, station ->
+        val playableItems = mutableListOf<MediaItem>()
+        for ((index, station) in stations.withIndex()) {
             val metadataBuilder = MediaMetadata.Builder()
                 .setTitle(station.name)
                 .setArtist(station.desc)
@@ -343,11 +447,11 @@ class AudioService : MediaLibraryService() {
                 
             applyArtworkToMetadata(station.resolvedImageUrl, metadataBuilder)
 
-            MediaItem.Builder()
+            playableItems.add(MediaItem.Builder()
                 .setMediaId("station_$index")
                 .setUri(station.streamURL)
                 .setMediaMetadata(metadataBuilder.build())
-                .build()
+                .build())
         }
 
         return playableItems.subList(selectedIndex, playableItems.size) +
@@ -355,18 +459,28 @@ class AudioService : MediaLibraryService() {
     }
 
     /**
-     * Android Auto cannot read "file:///android_asset/". 
-     * To fix this, we load the asset as a Bitmap byte array and embed it directly in the metadata.
+     * Android Auto and some controllers cannot read "file:///android_asset/" or might fail with remote URIs.
+     * To fix this, we load the artwork as a Bitmap byte array and embed it directly in the metadata.
      */
-    private fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder) {
-        if (imageUrl.startsWith("http")) {
-            // Android Auto can download HTTP URLs
-            builder.setArtworkUri(Uri.parse(imageUrl))
-        } else if (imageUrl.startsWith("file:///android_asset/")) {
-            // Extract file name and load bitmap into memory
-            val assetName = imageUrl.replace("file:///android_asset/", "")
-            
-            val bytes = artworkCache.getOrPut(assetName) {
+    private suspend fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder) {
+        if (imageUrl.isBlank()) return
+
+        val bytes = artworkCache[imageUrl] ?: withContext(Dispatchers.IO) {
+            if (imageUrl.startsWith("http")) {
+                try {
+                    val app = application as SwiftRadioApplication
+                    val request = okhttp3.Request.Builder().url(imageUrl).build()
+                    app.sharedOkHttpClient.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            response.body.bytes()
+                        } else null
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load remote artwork: $imageUrl", e)
+                    null
+                }
+            } else if (imageUrl.startsWith("file:///android_asset/")) {
+                val assetName = imageUrl.replace("file:///android_asset/", "")
                 try {
                     val inputStream = assets.open(assetName)
                     val bitmap = BitmapFactory.decodeStream(inputStream)
@@ -375,14 +489,20 @@ class AudioService : MediaLibraryService() {
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
                     outputStream.toByteArray()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to load asset artwork for Android Auto: $assetName", e)
+                    Log.e(TAG, "Failed to load asset artwork: $assetName", e)
                     null
                 }
-            }
-            
-            if (bytes != null) {
-                builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-            }
+            } else null
+        }
+
+        if (bytes != null) {
+            artworkCache[imageUrl] = bytes
+            builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+        }
+        
+        // Always set URI as well for controllers that prefer it or as fallback
+        if (imageUrl.startsWith("http")) {
+            builder.setArtworkUri(Uri.parse(imageUrl))
         }
     }
 
@@ -436,11 +556,12 @@ class AudioService : MediaLibraryService() {
 
         retryCount += 1
         val delayMs = when {
-            retryCount <= 2 -> 0L
-            retryCount <= 5 -> 1000L
-            else -> 3000L
+            retryCount <= 1 -> 1000L
+            retryCount <= 3 -> 3000L
+            else -> 6000L
         }
 
+        Log.d(TAG, "Svc retrying current item reason=$reason count=$retryCount delay=${delayMs}ms")
         cancelRetry()
         retryJob = serviceScope.launch {
             delay(delayMs)
@@ -486,14 +607,16 @@ class AudioService : MediaLibraryService() {
 
             val nowRealtime = SystemClock.elapsedRealtime()
             val currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
-            if (currentPosition > lastObservedPositionMs + 250L) {
+            if (currentPosition > lastObservedPositionMs + 100L) {
                 lastObservedPositionMs = currentPosition
                 lastPositionRealtimeMs = nowRealtime
                 scheduleStallCheck()
                 return@launch
             }
 
-            if (nowRealtime - lastPositionRealtimeMs >= 15_000L) {
+            val stallDuration = nowRealtime - lastPositionRealtimeMs
+            if (stallDuration >= 30_000L) {
+                Log.w(TAG, "Svc stall detected! duration=${stallDuration}ms position=$currentPosition")
                 retryCurrentItem("stall_ready")
                 return@launch
             }
